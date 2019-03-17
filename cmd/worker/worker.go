@@ -52,6 +52,7 @@ func (worker *Worker) RunHearbeat() {
 func main() {
 	fmt.Println("Starting worker")
 	var wg sync.WaitGroup
+	wg.Add(1)
 	client, err := rpc.DialHTTP("tcp", "localhost:8080")
 	if err != nil {
 		log.Fatal("dialing:", err)
@@ -59,8 +60,7 @@ func main() {
 
 	worker := new(Worker)
 	worker.client = client
-	// heartbeat go routine
-	go worker.RunHearbeat()
+	worker.taskId = -1
 
 	// open upto requests from server
 	rpc.Register(worker)
@@ -69,7 +69,6 @@ func main() {
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}
-	wg.Add(1)
 	go http.Serve(l, nil)
 
 	// register worker
@@ -81,7 +80,9 @@ func main() {
 		log.Fatal("RegisterWorker error:", err)
 	}
 	worker.Id = reply.WorkerId
-	worker.taskId = -1
+
+	// heartbeat go routine
+	go worker.RunHearbeat()
 
 	wg.Wait()
 }
