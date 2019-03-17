@@ -1,7 +1,7 @@
-package main
+package common
 
 type HeartbeatArgs struct {
-  WorkerId int
+	WorkerId int
 }
 
 type HeartbeatReply struct{}

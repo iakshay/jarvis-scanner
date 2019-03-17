@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	common "github.com/iakshay/jarvis-scanner"
 	"log"
 	"net"
 	"net/http"
@@ -19,12 +20,12 @@ func (worker *Worker) DoTask() {
 	fmt.Println("Doing Task")
 
 	time.Sleep(1000 * time.Millisecond)
-	args := &CompleteTaskArgs{}
-	var reply CompleteTaskReply
+	args := &common.CompleteTaskArgs{}
+	var reply common.CompleteTaskReply
 	worker.client.Call("Server.CompleteTask", args, &reply)
 }
 
-func (worker *Worker) SendTask(args *SendTaskArgs, reply *SendTaskReply) error {
+func (worker *Worker) SendTask(args *common.SendTaskArgs, reply *common.SendTaskReply) error {
 	if worker.taskId != -1 {
 		log.Fatal("already process task!")
 	}
@@ -37,8 +38,8 @@ func (worker *Worker) SendTask(args *SendTaskArgs, reply *SendTaskReply) error {
 }
 
 func (worker *Worker) RunHearbeat() {
-	args := &HeartbeatArgs{WorkerId: 0}
-	var reply HeartbeatReply
+	args := &common.HeartbeatArgs{WorkerId: 0}
+	var reply common.HeartbeatReply
 	for {
 		fmt.Println("Sending hearbeat")
 		worker.client.Call("Server.Heartbeat", args, &reply)
@@ -55,8 +56,8 @@ func main() {
 	}
 
 	// register worker
-	args := &RegisterWorkerArgs{Name: "worker", Ip: "localhost", Port: 7070}
-	var reply RegisterWorkerReply
+	args := &common.RegisterWorkerArgs{Name: "worker", Ip: "localhost", Port: 7070}
+	var reply common.RegisterWorkerReply
 
 	err = client.Call("Server.RegisterWorker", args, &reply)
 	if err != nil {

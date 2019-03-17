@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	common "github.com/iakshay/jarvis-scanner"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"log"
@@ -58,19 +59,19 @@ type Report struct {
 type Server struct {
 }
 
-func (server *Server) RegisterWorker(args *RegisterWorkerArgs, reply *RegisterWorkerReply) error {
+func (server *Server) RegisterWorker(args *common.RegisterWorkerArgs, reply *common.RegisterWorkerReply) error {
 	fmt.Println("Register worker", args)
 
 	return nil
 }
 
-func (server *Server) CompleteTask(args *CompleteTaskArgs, reply *CompleteTaskReply) error {
+func (server *Server) CompleteTask(args *common.CompleteTaskArgs, reply *common.CompleteTaskReply) error {
 	fmt.Println("Complete task", args)
 
 	return nil
 }
 
-func (server *Server) Heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
+func (server *Server) Heartbeat(args *common.HeartbeatArgs, reply *common.HeartbeatReply) error {
 	fmt.Println("Send heartbeat", args)
 
 	return nil
