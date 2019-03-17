@@ -7,12 +7,13 @@ type HeartbeatArgs struct {
 type HeartbeatReply struct{}
 
 type RegisterWorkerArgs struct {
-	Name string
-	Ip   string
-	Port int
+	Name    string
+	Address string
 }
 
-type RegisterWorkerReply struct{}
+type RegisterWorkerReply struct {
+	WorkerId int
+}
 
 type CompleteTaskArgs struct {
 	TaskId int

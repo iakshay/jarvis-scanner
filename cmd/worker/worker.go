@@ -11,6 +11,7 @@ import (
 )
 
 type Worker struct {
+	Id     int
 	taskId int
 	params string
 	client *rpc.Client
@@ -38,7 +39,7 @@ func (worker *Worker) SendTask(args *common.SendTaskArgs, reply *common.SendTask
 }
 
 func (worker *Worker) RunHearbeat() {
-	args := &common.HeartbeatArgs{WorkerId: 0}
+	args := &common.HeartbeatArgs{WorkerId: worker.Id}
 	var reply common.HeartbeatReply
 	for {
 		fmt.Println("Sending hearbeat")
@@ -56,7 +57,7 @@ func main() {
 	}
 
 	// register worker
-	args := &common.RegisterWorkerArgs{Name: "worker", Ip: "localhost", Port: 7070}
+	args := &common.RegisterWorkerArgs{Name: "worker", Address: "localhost:7070"}
 	var reply common.RegisterWorkerReply
 
 	err = client.Call("Server.RegisterWorker", args, &reply)
@@ -66,6 +67,7 @@ func main() {
 
 	worker := new(Worker)
 	worker.client = client
+	worker.Id = reply.WorkerId
 	// heartbeat go routine
 	go worker.RunHearbeat()
 

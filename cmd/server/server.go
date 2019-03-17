@@ -21,65 +21,103 @@ const (
 )
 
 type Task struct {
-	gorm.Model
-	JobId    int
-	State    TaskState
-	Params   string
-	WorkerId int
-	Worker   Worker `gorm:"foreignkey:TaskId; association_foreignkey:Id"`
-	//CreationTime *time.Time
-	//CompletionTime *time.Time
+	Id          int
+	JobId       int
+	State       TaskState
+	Params      string
+	WorkerId    int
+	Worker      Worker `gorm:"foreignkey:TaskId; association_foreignkey:Id"`
+	Result      string
+	CreatedAt   *time.Time
+	CompletedAt *time.Time
 }
 
 type Job struct {
-	gorm.Model
-	//JobId int `gorm:"primary_key;auto_increment"`
-	//State TaskState
-	Params       string
-	CreationTime *time.Time
-	Tasks        []Task `gorm:"foreignkey:JobId;association_foreignkey:Id"`
+	Id     int
+	Params string
+	Tasks  []Task `gorm:"foreignkey:JobId;association_foreignkey:Id"`
 }
 
 type Worker struct {
-	gorm.Model
-	TaskId           int
-	Name             string
-	Ip               string
-	Port             int
-	HeartbeatTime    *time.Time
-	RegistrationTime *time.Time
-}
-
-type Report struct {
-	gorm.Model
-	TaskId int
-	Result string
+	Id        int
+	TaskId    int
+	Name      string
+	Address   string
+	UpdatedAt *time.Time
+	CreatedAt *time.Time
 }
 
 type Server struct {
+	db *gorm.DB
+
+	// map of workerId and rpc connection
+	connections map[int]*rpc.Client
 }
 
 func (server *Server) RegisterWorker(args *common.RegisterWorkerArgs, reply *common.RegisterWorkerReply) error {
 	fmt.Println("Register worker", args)
 
+	// init connection to worker
+	client, err := rpc.DialHTTP("tcp", args.Address)
+	if err != nil {
+		log.Println("dialing:", err)
+	}
+
+	// insert entry in workers table
+	worker := &Worker{Name: args.Name, Address: args.Address}
+	if err := server.db.Create(worker).Error; err != nil {
+		log.Printf("Error creating worker %s\n", args.Name)
+	}
+
+	log.Println("created worker %d\n", worker.Id)
+	server.connections[worker.Id] = client
+
+	reply.WorkerId = worker.Id
 	return nil
 }
 
 func (server *Server) CompleteTask(args *common.CompleteTaskArgs, reply *common.CompleteTaskReply) error {
 	fmt.Println("Complete task", args)
 
+	var task Task
+	// insert entry in reports table
+	if err := server.db.Table("tasks").Where("Id = ?", args.TaskId).Update("result", args.Result).Error; err != nil {
+		log.Printf("Error adding resort for TaskId %d\n", args.TaskId)
+	}
 	return nil
 }
 
 func (server *Server) Heartbeat(args *common.HeartbeatArgs, reply *common.HeartbeatReply) error {
 	fmt.Println("Send heartbeat", args)
 
+	// update worker hearbeat
+	if err := server.db.Table("workers").Where("Id = ?", args.WorkerId).Update("updated_at", time.Now()).Error; err != nil {
+		log.Printf("Error updating hearbeat for worker %d\n", args.WorkerId)
+	}
 	return nil
 }
 
 func main() {
 	fmt.Println("starting server")
+
+	// setup database
+	db, err := gorm.Open("sqlite3", "test.db")
+	if err != nil {
+		panic("failed to connect database")
+	}
+	defer db.Close()
+	db.LogMode(true)
+
+	// Migrate the schema
+	db.AutoMigrate(&Job{})
+	db.AutoMigrate(&Task{})
+	db.AutoMigrate(&Worker{})
+
 	server := new(Server)
+	server.db = db
+	server.connections = make(map[int]*rpc.Client)
+
+	// start rpc server
 	rpc.Register(server)
 	rpc.HandleHTTP()
 	l, e := net.Listen("tcp", "localhost:8080")
@@ -90,19 +128,8 @@ func main() {
 	http.Serve(l, nil)
 }
 
-func dbMain() {
-	db, err := gorm.Open("sqlite3", "test.db")
-	if err != nil {
-		panic("failed to connect database")
-	}
-	defer db.Close()
-	db.LogMode(true)
-	// Migrate the schema
-	db.AutoMigrate(&Job{})
-	db.AutoMigrate(&Task{})
-	db.AutoMigrate(&Worker{})
+/*func dbMain() {
 
-	db.Create(&Worker{Name: "Worker1", Ip: "100.0.2.4", Port: 80})
 	// Create
 	var worker Worker
 	db.First(&worker, 0)
@@ -144,4 +171,4 @@ func dbMain() {
 	//db.Delete(&product)
 
 	db.Table("workers").Where("name = ?", "Worker1").Update("heartbeat_time", time.Now())
-}
+}*/
