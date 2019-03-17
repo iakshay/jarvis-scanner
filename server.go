@@ -2,10 +2,13 @@ package main
 
 import (
 	"fmt"
-	"time"
-	//"net/http"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
+	"log"
+	"net"
+	"net/http"
+	"net/rpc"
+	"time"
 )
 
 type TaskState int
@@ -52,17 +55,41 @@ type Report struct {
 	Result string
 }
 
-/*func main() {
-	http.HandleFunc("/", func (w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Welcome to my website!")
-	})
+type Server struct {
+}
 
-	fs := http.FileServer(http.Dir("static/"))
-	http.Handle("/static/", http.StripPrefix("/static/", fs))
+func (server *Server) RegisterWorker(args *RegisterWorkerArgs, reply *RegisterWorkerReply) error {
+	fmt.Println("Register worker", args)
 
-	http.ListenAndServe(":8080", nil)
-}*/
+	return nil
+}
+
+func (server *Server) CompleteTask(args *CompleteTaskArgs, reply *CompleteTaskReply) error {
+	fmt.Println("Complete task", args)
+
+	return nil
+}
+
+func (server *Server) Heartbeat(args *HeartbeatArgs, reply *HeartbeatReply) error {
+	fmt.Println("Send heartbeat", args)
+
+	return nil
+}
+
 func main() {
+	fmt.Println("starting server")
+	server := new(Server)
+	rpc.Register(server)
+	rpc.HandleHTTP()
+	l, e := net.Listen("tcp", "localhost:8080")
+	if e != nil {
+		log.Fatal("listen error:", e)
+	}
+
+	http.Serve(l, nil)
+}
+
+func dbMain() {
 	db, err := gorm.Open("sqlite3", "test.db")
 	if err != nil {
 		panic("failed to connect database")
