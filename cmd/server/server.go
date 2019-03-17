@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
+	"sync"
 	"time"
 )
 
@@ -50,7 +51,6 @@ type Worker struct {
 type Server struct {
 	db *gorm.DB
 
-	// map of workerId and rpc connection
 	connections map[int]*rpc.Client
 }
 
@@ -79,7 +79,6 @@ func (server *Server) RegisterWorker(args *common.RegisterWorkerArgs, reply *com
 func (server *Server) CompleteTask(args *common.CompleteTaskArgs, reply *common.CompleteTaskReply) error {
 	fmt.Println("Complete task", args)
 
-	var task Task
 	// insert entry in reports table
 	if err := server.db.Table("tasks").Where("Id = ?", args.TaskId).Update("result", args.Result).Error; err != nil {
 		log.Printf("Error adding resort for TaskId %d\n", args.TaskId)
@@ -97,9 +96,20 @@ func (server *Server) Heartbeat(args *common.HeartbeatArgs, reply *common.Heartb
 	return nil
 }
 
+func (server *Server) startTask() {
+
+	for id, client := range server.connections {
+		fmt.Printf("sending task to worker id: %d \n", id)
+		args := &common.SendTaskArgs{Params: "Simple Task", TaskId: 1}
+		var reply common.SendTaskReply
+		client.Call("Worker.SendTask", args, reply)
+		break
+	}
+}
 func main() {
 	fmt.Println("starting server")
-
+	var wg sync.WaitGroup
+	wg.Add(1)
 	// setup database
 	db, err := gorm.Open("sqlite3", "test.db")
 	if err != nil {
@@ -125,7 +135,12 @@ func main() {
 		log.Fatal("listen error:", e)
 	}
 
-	http.Serve(l, nil)
+	go http.Serve(l, nil)
+
+	time.Sleep(3 * time.Second)
+	// start dummy task on one worker
+	server.startTask()
+	wg.Wait()
 }
 
 /*func dbMain() {
