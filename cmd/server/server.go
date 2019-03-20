@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	common "github.com/iakshay/jarvis-scanner"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
@@ -125,7 +126,9 @@ type App struct {
 
 func NewApp() *App {
 	app := &App{
-		DefaultRoute: handleJobs,
+		DefaultRoute: func(resp *Response, req *Request) {
+			resp.handleJobs(req)
+		},
 	}
 
 	return app
@@ -165,7 +168,7 @@ type Response struct {
 	http.ResponseWriter
 }
 
-func handleJobs(w http.ResponseWriter, r *http.Request) {
+func (w *Response) handleJobs(r *Request) {
 	if r.URL.Path != "/jobs" {
 		http.Error(w, "404 not found.", http.StatusNotFound)
 		return
@@ -173,6 +176,10 @@ func handleJobs(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "GET":
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+
+		io.WriteString(w, fmt.Sprintf("%s\n", "Hello world"))
 		return
 	case "POST":
 		return
@@ -180,7 +187,7 @@ func handleJobs(w http.ResponseWriter, r *http.Request) {
 
 }
 
-fund handleJobID(w http.ResponseWriter, r *http.Request) {
+func (w *Response) handleJobID(r *Request) {
 	// TODO: Add error handling
 
 	switch r.Method {
@@ -214,7 +221,9 @@ func main() {
 	server.connections = make(map[int]*rpc.Client)
 
 	app := NewApp()
-	app.Handle('/jobs/([0-9]+)$', handleJobID)
+	app.Handle("/jobs/([0-9]+)$", func(resp *Response, req *Request) {
+		resp.handleJobID(req)
+	})
 
 	// start rpc server
 	rpc.Register(server)
