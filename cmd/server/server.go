@@ -192,6 +192,10 @@ func (w *Response) handleJobID(r *Request) {
 
 	switch r.Method {
 	case "GET":
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+
+		io.WriteString(w, fmt.Sprintf("%s\n", "Shalom ha'olam"))
 		return
 	case "DELETE":
 		return
@@ -224,6 +228,11 @@ func main() {
 	app.Handle("/jobs/([0-9]+)$", func(resp *Response, req *Request) {
 		resp.handleJobID(req)
 	})
+
+	err_ := http.ListenAndServe("localhost:8080", app)
+	if err_ != nil {
+		log.Fatalf("Could not start server: %s\n", err_.Error())
+	}
 
 	// start rpc server
 	rpc.Register(server)
