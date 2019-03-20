@@ -11,6 +11,7 @@ import (
 	"net/rpc"
 	"sync"
 	"time"
+        "regexp"
 )
 
 type TaskState int
@@ -106,6 +107,91 @@ func (server *Server) startTask() {
 		break
 	}
 }
+
+// https://gist.github.com/reagent/043da4661d2984e9ecb1ccb5343bf438
+// From the example under, "Custom Regular Expression-Based Router"
+
+type Handler func(*Response, *Request)
+
+type Route struct {
+	Pattern *regexp.Regexp
+	Handler Handler
+}
+
+type App struct {
+	Routes       []Route
+	DefaultRoute Handler
+}
+
+func NewApp() *App {
+	app := &App{
+		DefaultRoute: handleJobs,
+	}
+
+	return app
+}
+
+func (a *App) Handle(pattern string, handler Handler) {
+	re := regexp.MustCompile(pattern)
+	route := Route{Pattern: re, Handler: handler}
+
+	a.Routes = append(a.Routes, route)
+}
+
+func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	req := &Request{Request: r}
+	resp := &Response{w}
+
+	for _, rt := range a.Routes {
+		if matches := rt.Pattern.FindStringSubmatch(r.URL.Path); len(matches) > 0 {
+			if len(matches) > 1 {
+				req.Params = matches[1:]
+			}
+
+			rt.Handler(resp, req)
+			return
+		}
+	}
+
+	a.DefaultRoute(resp, req)
+}
+
+type Request struct {
+	*http.Request
+	Params []string
+}
+
+type Response struct {
+	http.ResponseWriter
+}
+
+func handleJobs(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/jobs" {
+		http.Error(w, "404 not found.", http.StatusNotFound)
+		return
+	}
+
+	switch r.Method {
+	case "GET":
+		return
+	case "POST":
+		return
+	}
+
+}
+
+fund handleJobID(w http.ResponseWriter, r *http.Request) {
+	// TODO: Add error handling
+
+	switch r.Method {
+	case "GET":
+		return
+	case "DELETE":
+		return
+	}
+}
+
+
 func main() {
 	fmt.Println("starting server")
 	var wg sync.WaitGroup
@@ -126,6 +212,9 @@ func main() {
 	server := new(Server)
 	server.db = db
 	server.connections = make(map[int]*rpc.Client)
+
+	app := NewApp()
+	app.Handle('/jobs/([0-9]+)$', handleJobID)
 
 	// start rpc server
 	rpc.Register(server)
