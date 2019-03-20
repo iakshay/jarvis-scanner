@@ -54,6 +54,7 @@ type Server struct {
 	db *gorm.DB
 
 	connections map[int]*rpc.Client
+	Routes		[]Route
 }
 
 func (server *Server) RegisterWorker(args *common.RegisterWorkerArgs, reply *common.RegisterWorkerReply) error {
@@ -112,74 +113,61 @@ func (server *Server) startTask() {
 // https://gist.github.com/reagent/043da4661d2984e9ecb1ccb5343bf438
 // From the example under, "Custom Regular Expression-Based Router"
 
-type Handler func(*Response, *Request)
+type Handler func(*Context)
 
 type Route struct {
 	Pattern *regexp.Regexp
 	Handler Handler
 }
 
-type App struct {
-	Routes       []Route
-	DefaultRoute Handler
-}
-
-func NewApp() *App {
-	app := &App{
-		DefaultRoute: func(resp *Response, req *Request) {
-			resp.handleJobs(req)
-		},
-	}
-
-	return app
-}
-
-func (a *App) Handle(pattern string, handler Handler) {
+func (s *Server) Handle(pattern string, handler Handler) {
 	re := regexp.MustCompile(pattern)
 	route := Route{Pattern: re, Handler: handler}
 
-	a.Routes = append(a.Routes, route)
+	s.Routes = append(s.Routes, route)
 }
 
-func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	req := &Request{Request: r}
-	resp := &Response{w}
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx := &Context{Response: w, Request: r, Server: s}
 
-	for _, rt := range a.Routes {
+	for _, rt := range s.Routes {
 		if matches := rt.Pattern.FindStringSubmatch(r.URL.Path); len(matches) > 0 {
 			if len(matches) > 1 {
-				req.Params = matches[1:]
+				ctx.Params = matches[1:]
 			}
 
-			rt.Handler(resp, req)
+			rt.Handler(ctx)
 			return
 		}
 	}
-
-	a.DefaultRoute(resp, req)
 }
 
-type Request struct {
-	*http.Request
-	Params []string
+type Context struct {
+	Response	http.ResponseWriter
+	Request		*http.Request
+	Server		*Server
+	Params		[]string
 }
 
-type Response struct {
-	http.ResponseWriter
-}
+func (ctx *Context) handleJobs() {
+	r := ctx.Request
 
-func (w *Response) handleJobs(r *Request) {
-	if r.URL.Path != "/jobs" {
+	if r.URL.Path != "/jobs/" {
+		w := ctx.Response
 		http.Error(w, "404 not found.", http.StatusNotFound)
 		return
 	}
 
 	switch r.Method {
 	case "GET":
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusOK)
+	/*	var jobs []Job
+		db.Find(&jobs)
+		fmt.Println(jobs)i
+	*/
+		ctx.Response.Header().Set("Content-Type", "text/plain")
+		ctx.Response.WriteHeader(http.StatusOK)
 
-		io.WriteString(w, fmt.Sprintf("%s\n", "Hello world"))
+		io.WriteString(ctx.Response, fmt.Sprintf("Mah shlomchah"))
 		return
 	case "POST":
 		return
@@ -187,15 +175,15 @@ func (w *Response) handleJobs(r *Request) {
 
 }
 
-func (w *Response) handleJobID(r *Request) {
-	// TODO: Add error handling
+func (ctx *Context) handleJobID() {
+	r  := ctx.Request
 
 	switch r.Method {
 	case "GET":
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusOK)
+		ctx.Response.Header().Set("Content-Type", "text/plain")
+                ctx.Response.WriteHeader(http.StatusOK)
 
-		io.WriteString(w, fmt.Sprintf("%s\n", "Shalom ha'olam"))
+                io.WriteString(ctx.Response, fmt.Sprintf("Mah shlomchah"))
 		return
 	case "DELETE":
 		return
@@ -224,12 +212,16 @@ func main() {
 	server.db = db
 	server.connections = make(map[int]*rpc.Client)
 
-	app := NewApp()
-	app.Handle("/jobs/([0-9]+)$", func(resp *Response, req *Request) {
-		resp.handleJobID(req)
+	//Star custom Mux, for dynamic routing from client-server interactions
+	server.Handle("/jobs/([0-9]+)$", func(ctx *Context) {
+		ctx.handleJobID()
 	})
 
-	err_ := http.ListenAndServe("localhost:8080", app)
+	server.Handle("/jobs/", func(ctx *Context) {
+		ctx.handleJobs()
+	})
+
+	err_ := http.ListenAndServe("localhost:8080", server)
 	if err_ != nil {
 		log.Fatalf("Could not start server: %s\n", err_.Error())
 	}
