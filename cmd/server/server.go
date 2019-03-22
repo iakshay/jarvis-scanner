@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"strconv"
 	common "github.com/iakshay/jarvis-scanner"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
@@ -149,8 +150,10 @@ type Context struct {
 	Params		[]string
 }
 
-func (ctx *Context) handleJobs() {
+func (s *Server) handleJobs(ctx *Context) {
 	r := ctx.Request
+	w := ctx.Response
+	db := s.db
 
 	if r.URL.Path != "/jobs/" {
 		w := ctx.Response
@@ -160,14 +163,39 @@ func (ctx *Context) handleJobs() {
 
 	switch r.Method {
 	case "GET":
-	/*	var jobs []Job
-		db.Find(&jobs)
-		fmt.Println(jobs)i
-	*/
-		ctx.Response.Header().Set("Content-Type", "text/plain")
-		ctx.Response.WriteHeader(http.StatusOK)
+		rows, err := db.Table("tasks").Joins("inner join jobs on jobs.id = tasks.job_id").Rows()
+		if err != nil {
+			log.Fatal(err)
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		jobId := -1
+		completed := true
+		for rows.Next() {
+			task := new(Task)
+			if err := rows.Scan(&(task.Id), &(task.JobId), &(task.State), &(task.Params), &(task.WorkerId), &(task.Result), &(task.CreatedAt), &(task.CompletedAt)); err != nil {
+				log.Fatal(err)
+			}
 
-		io.WriteString(ctx.Response, fmt.Sprintf("Mah shlomchah"))
+			if task.JobId != jobId {
+				jobId = task.JobId
+				if jobId > 0 {
+					if completed == true {
+						io.WriteString(w, "Job " + strconv.Itoa(task.JobId) + ": complete")
+					} else {
+						io.WriteString(w, "Job " + strconv.Itoa(task.JobId) + ": incomplete")
+					}
+					completed = true
+					io.WriteString(w, "\n\n")
+				}
+			}
+
+			if task.State != Complete {
+				completed = false
+			}
+
+			io.WriteString(w,  task.Params + "\n")
+		}
 		return
 	case "POST":
 		return
@@ -175,15 +203,11 @@ func (ctx *Context) handleJobs() {
 
 }
 
-func (ctx *Context) handleJobID() {
+func (s *Server) handleJobID(ctx *Context) {
 	r  := ctx.Request
 
 	switch r.Method {
 	case "GET":
-		ctx.Response.Header().Set("Content-Type", "text/plain")
-                ctx.Response.WriteHeader(http.StatusOK)
-
-                io.WriteString(ctx.Response, fmt.Sprintf("Mah shlomchah"))
 		return
 	case "DELETE":
 		return
@@ -207,6 +231,25 @@ func main() {
 	db.AutoMigrate(&Job{})
 	db.AutoMigrate(&Task{})
 	db.AutoMigrate(&Worker{})
+/*
+	for i:= 0; i < 2; i++ {
+		var tasks []Task
+		for j:= 0; j < 3; j++ {
+			worker := new(Worker)
+			task := new(Task)
+			params := "Task" + strconv.Itoa(j)
+			task.Params = params
+			task.Worker = *worker
+			task.State = Queued
+			db.Create(task)
+			tasks = append(tasks, *task)
+		}
+                db.Create(&Job{
+                        //State: Queued,
+                        Params: fmt.Sprintf("FooBar %d", i),
+                        Tasks: tasks,
+                })
+        }*/
 
 	server := new(Server)
 	server.db = db
@@ -214,11 +257,11 @@ func main() {
 
 	//Star custom Mux, for dynamic routing from client-server interactions
 	server.Handle("/jobs/([0-9]+)$", func(ctx *Context) {
-		ctx.handleJobID()
+		server.handleJobID(ctx)
 	})
 
 	server.Handle("/jobs/", func(ctx *Context) {
-		ctx.handleJobs()
+		server.handleJobs(ctx)
 	})
 
 	err_ := http.ListenAndServe("localhost:8080", server)
