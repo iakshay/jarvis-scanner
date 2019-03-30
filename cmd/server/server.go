@@ -1,19 +1,20 @@
 package main
 
 import (
+	"flag"
 	"fmt"
-	"io"
-	"strconv"
 	common "github.com/iakshay/jarvis-scanner"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"net/rpc"
+	"regexp"
+	"strconv"
 	"sync"
 	"time"
-        "regexp"
 )
 
 type TaskState int
@@ -55,7 +56,7 @@ type Server struct {
 	db *gorm.DB
 
 	connections map[int]*rpc.Client
-	Routes		[]Route
+	Routes      []Route
 }
 
 func (server *Server) RegisterWorker(args *common.RegisterWorkerArgs, reply *common.RegisterWorkerReply) error {
@@ -144,10 +145,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type Context struct {
-	Response	http.ResponseWriter
-	Request		*http.Request
-	Server		*Server
-	Params		[]string
+	Response http.ResponseWriter
+	Request  *http.Request
+	Server   *Server
+	Params   []string
 }
 
 func (s *Server) handleJobs(ctx *Context) {
@@ -181,9 +182,9 @@ func (s *Server) handleJobs(ctx *Context) {
 				jobId = task.JobId
 				if jobId > 0 {
 					if completed == true {
-						io.WriteString(w, "Job " + strconv.Itoa(task.JobId) + ": complete")
+						io.WriteString(w, "Job "+strconv.Itoa(task.JobId)+": complete")
 					} else {
-						io.WriteString(w, "Job " + strconv.Itoa(task.JobId) + ": incomplete")
+						io.WriteString(w, "Job "+strconv.Itoa(task.JobId)+": incomplete")
 					}
 					completed = true
 					io.WriteString(w, "\n\n")
@@ -194,7 +195,7 @@ func (s *Server) handleJobs(ctx *Context) {
 				completed = false
 			}
 
-			io.WriteString(w,  task.Params + "\n")
+			io.WriteString(w, task.Params+"\n")
 		}
 		return
 	case "POST":
@@ -204,7 +205,7 @@ func (s *Server) handleJobs(ctx *Context) {
 }
 
 func (s *Server) handleJobID(ctx *Context) {
-	r  := ctx.Request
+	r := ctx.Request
 
 	switch r.Method {
 	case "GET":
@@ -214,13 +215,16 @@ func (s *Server) handleJobID(ctx *Context) {
 	}
 }
 
-
 func main() {
+	var serverAddr string
+	var dbPath string
+	flag.StringVar(&serverAddr, "serverAddr", "localhost:8080", "address of the server")
+	flag.StringVar(&dbPath, "db", "test.db", "database path")
+	flag.Parse()
 	fmt.Println("starting server")
 	var wg sync.WaitGroup
-	wg.Add(1)
 	// setup database
-	db, err := gorm.Open("sqlite3", "test.db")
+	db, err := gorm.Open("sqlite3", dbPath)
 	if err != nil {
 		panic("failed to connect database")
 	}
@@ -231,25 +235,25 @@ func main() {
 	db.AutoMigrate(&Job{})
 	db.AutoMigrate(&Task{})
 	db.AutoMigrate(&Worker{})
-/*
-	for i:= 0; i < 2; i++ {
-		var tasks []Task
-		for j:= 0; j < 3; j++ {
-			worker := new(Worker)
-			task := new(Task)
-			params := "Task" + strconv.Itoa(j)
-			task.Params = params
-			task.Worker = *worker
-			task.State = Queued
-			db.Create(task)
-			tasks = append(tasks, *task)
-		}
-                db.Create(&Job{
-                        //State: Queued,
-                        Params: fmt.Sprintf("FooBar %d", i),
-                        Tasks: tasks,
-                })
-        }*/
+	/*
+	   	for i:= 0; i < 2; i++ {
+	   		var tasks []Task
+	   		for j:= 0; j < 3; j++ {
+	   			worker := new(Worker)
+	   			task := new(Task)
+	   			params := "Task" + strconv.Itoa(j)
+	   			task.Params = params
+	   			task.Worker = *worker
+	   			task.State = Queued
+	   			db.Create(task)
+	   			tasks = append(tasks, *task)
+	   		}
+	                   db.Create(&Job{
+	                           //State: Queued,
+	                           Params: fmt.Sprintf("FooBar %d", i),
+	                           Tasks: tasks,
+	                   })
+	           }*/
 
 	server := new(Server)
 	server.db = db
@@ -264,19 +268,18 @@ func main() {
 		server.handleJobs(ctx)
 	})
 
-	err_ := http.ListenAndServe("localhost:8080", server)
-	if err_ != nil {
-		log.Fatalf("Could not start server: %s\n", err_.Error())
-	}
+	wg.Add(1)
+	go http.ListenAndServe(serverAddr, server)
 
 	// start rpc server
 	rpc.Register(server)
 	rpc.HandleHTTP()
-	l, e := net.Listen("tcp", "localhost:8080")
+	l, e := net.Listen("tcp", serverAddr)
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}
 
+	wg.Add(1)
 	go http.Serve(l, nil)
 
 	time.Sleep(3 * time.Second)

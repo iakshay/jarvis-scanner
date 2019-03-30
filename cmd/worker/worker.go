@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	common "github.com/iakshay/jarvis-scanner"
 	"log"
@@ -50,10 +51,14 @@ func (worker *Worker) RunHearbeat() {
 }
 
 func main() {
-	fmt.Println("Starting worker")
+	var serverAddr string
+	var workerAddr string
+	flag.StringVar(&serverAddr, "serverAddr", "localhost:8080", "address of the server")
+	flag.StringVar(&workerAddr, "workerAddr", "localhost:7070", "address of the worker")
+	flag.Parse()
 	var wg sync.WaitGroup
 	wg.Add(1)
-	client, err := rpc.DialHTTP("tcp", "localhost:8080")
+	client, err := rpc.DialHTTP("tcp", serverAddr)
 	if err != nil {
 		log.Fatal("dialing:", err)
 	}
@@ -63,16 +68,17 @@ func main() {
 	worker.taskId = -1
 
 	// open upto requests from server
+	fmt.Println("Starting worker")
 	rpc.Register(worker)
 	rpc.HandleHTTP()
-	l, e := net.Listen("tcp", "localhost:7070")
+	l, e := net.Listen("tcp", workerAddr)
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}
 	go http.Serve(l, nil)
 
 	// register worker
-	args := &common.RegisterWorkerArgs{Name: "worker", Address: "localhost:7070"}
+	args := &common.RegisterWorkerArgs{Name: "worker", Address: workerAddr}
 	var reply common.RegisterWorkerReply
 
 	err = client.Call("Server.RegisterWorker", args, &reply)
