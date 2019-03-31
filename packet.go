@@ -9,11 +9,11 @@ import (
 	"os"
 )
 
-func isAlive(ipBlock string) []string {
+func IsAlive(ip string) []string {
 	var s []string
-	ip := "172.217.10.14"
 	c, err := icmp.ListenPacket("ip4:icmp", "0.0.0.0")
 	if err != nil {
+		// most likely, need to run tests as root
 		log.Fatal(err)
 	}
 	defer c.Close()
@@ -50,4 +50,8 @@ func isAlive(ipBlock string) []string {
 	}
 	s = append(s, ip)
 	return s
+}
+
+func PortScan(ip string, port int) {
+
 }

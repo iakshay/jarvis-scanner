@@ -18,9 +18,9 @@
   go get -u github.com/mattn/go-sqlite3
 
   # network packet related
-  go get -u go get -u golang.org/x/net/ipv6
-  go get -u go get -u golang.org/x/net/ipv4
-  go get -u go get -u golang.org/x/net/icmp
+  go get -u golang.org/x/net/ipv6
+  go get -u golang.org/x/net/ipv4
+  go get -u golang.org/x/net/icmp
 
   # build and install worker and server
   go install ./...
