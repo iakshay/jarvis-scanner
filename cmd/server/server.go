@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
+	"strings"
 	"strconv"
 	common "github.com/iakshay/jarvis-scanner"
 	"github.com/jinzhu/gorm"
@@ -57,6 +59,13 @@ type Server struct {
 	connections map[int]*rpc.Client
 	Routes		[]Route
 }
+
+type JobType int
+
+const (
+isAlive	JobType = 1
+portScan JobType = 2
+)
 
 func (server *Server) RegisterWorker(args *common.RegisterWorkerArgs, reply *common.RegisterWorkerReply) error {
 	fmt.Println("Register worker", args)
@@ -162,6 +171,7 @@ func (s *Server) handleJobs(ctx *Context) {
 	}
 
 	switch r.Method {
+	//TODO: Just return each job's ID, params; for specific job's details, use its ID returned form this function
 	case "GET":
 		rows, err := db.Table("tasks").Joins("inner join jobs on jobs.id = tasks.job_id").Rows()
 		if err != nil {
@@ -198,6 +208,30 @@ func (s *Server) handleJobs(ctx *Context) {
 		}
 		return
 	case "POST":
+		b, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		s := string(b)
+		spl := strings.Split(s, ", ")
+		fullType := strings.Split(spl[1], ":")
+
+		// The code representing the type of scan the client tells us to perform
+		// "1" for isAlive, "2" for scanning of ports
+		typeVal := strconv.Atoi(fullType[1][1])
+
+		workerCount := db.
+
+		if typVal == isAlive {
+			fullIPRange := strings.Split(spl[0], ":")
+			length := len(fullIPRange[1])
+			ipRangeVal := fullIPRange[1][1:(length - 1)]
+			
+		} else {
+
+		}
+		io.WriteString(w, s)
 		return
 	}
 
@@ -231,8 +265,8 @@ func main() {
 	db.AutoMigrate(&Job{})
 	db.AutoMigrate(&Task{})
 	db.AutoMigrate(&Worker{})
-/*
-	for i:= 0; i < 2; i++ {
+
+/*	for i:= 0; i < 2; i++ {
 		var tasks []Task
 		for j:= 0; j < 3; j++ {
 			worker := new(Worker)
@@ -242,10 +276,10 @@ func main() {
 			task.Worker = *worker
 			task.State = Queued
 			db.Create(task)
+			db.Create(worker)
 			tasks = append(tasks, *task)
 		}
                 db.Create(&Job{
-                        //State: Queued,
                         Params: fmt.Sprintf("FooBar %d", i),
                         Tasks: tasks,
                 })
