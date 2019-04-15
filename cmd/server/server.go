@@ -3,9 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
-	"strings"
-	"strconv"
 	common "github.com/iakshay/jarvis-scanner"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
@@ -65,8 +62,8 @@ type Server struct {
 type JobType int
 
 const (
-isAlive	JobType = 1
-portScan JobType = 2
+	isAlive  JobType = 1
+	portScan JobType = 2
 )
 
 func (server *Server) RegisterWorker(args *common.RegisterWorkerArgs, reply *common.RegisterWorkerReply) error {
@@ -210,30 +207,30 @@ func (s *Server) handleJobs(ctx *Context) {
 		}
 		return
 	case "POST":
-		b, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		s := string(b)
-		spl := strings.Split(s, ", ")
-		fullType := strings.Split(spl[1], ":")
+		// Akshay - commented below cause since it was causing build failure
+		//b, err := ioutil.ReadAll(r.Body)
+		//if err != nil {
+		//log.Fatal(err)
+		//}
+		//s := string(b)
+		//spl := strings.Split(s, ", ")
+		//fullType := strings.Split(spl[1], ":")
 
 		// The code representing the type of scan the client tells us to perform
 		// "1" for isAlive, "2" for scanning of ports
-		typeVal := strconv.Atoi(fullType[1][1])
+		//typeVal := strconv.Atoi(fullType[1][1])
 
-		workerCount := db.
+		//workerCount := db.
 
-		if typVal == isAlive {
-			fullIPRange := strings.Split(spl[0], ":")
-			length := len(fullIPRange[1])
-			ipRangeVal := fullIPRange[1][1:(length - 1)]
-			
-		} else {
+		//if typVal == isAlive {
+		//fullIPRange := strings.Split(spl[0], ":")
+		//length := len(fullIPRange[1])
+		//ipRangeVal := fullIPRange[1][1:(length - 1)]
 
-		}
-		io.WriteString(w, s)
+		//} else {
+
+		//}
+		//io.WriteString(w, s)
 		return
 	}
 
@@ -271,24 +268,24 @@ func main() {
 	db.AutoMigrate(&Task{})
 	db.AutoMigrate(&Worker{})
 
-/*	for i:= 0; i < 2; i++ {
-		var tasks []Task
-		for j:= 0; j < 3; j++ {
-			worker := new(Worker)
-			task := new(Task)
-			params := "Task" + strconv.Itoa(j)
-			task.Params = params
-			task.Worker = *worker
-			task.State = Queued
-			db.Create(task)
-			db.Create(worker)
-			tasks = append(tasks, *task)
-		}
-                db.Create(&Job{
-                        Params: fmt.Sprintf("FooBar %d", i),
-                        Tasks: tasks,
-                })
-        }*/
+	/*	for i:= 0; i < 2; i++ {
+				var tasks []Task
+				for j:= 0; j < 3; j++ {
+					worker := new(Worker)
+					task := new(Task)
+					params := "Task" + strconv.Itoa(j)
+					task.Params = params
+					task.Worker = *worker
+					task.State = Queued
+					db.Create(task)
+					db.Create(worker)
+					tasks = append(tasks, *task)
+				}
+		                db.Create(&Job{
+		                        Params: fmt.Sprintf("FooBar %d", i),
+		                        Tasks: tasks,
+		                })
+		        }*/
 
 	server := new(Server)
 	server.db = db
