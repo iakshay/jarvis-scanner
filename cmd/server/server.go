@@ -112,7 +112,7 @@ func (server *Server) startTask() {
 
 	for id, client := range server.connections {
 		fmt.Printf("sending task to worker id: %d \n", id)
-		args := &common.SendTaskArgs{Params: "Simple Task", TaskId: 1}
+		args := &common.SendTaskArgs{Param: common.TaskParam{}, TaskId: 1}
 		var reply common.SendTaskReply
 		client.Call("Worker.SendTask", args, reply)
 		break

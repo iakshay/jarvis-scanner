@@ -15,7 +15,7 @@ import (
 type Worker struct {
 	Id     int
 	taskId int
-	params string
+	param  common.TaskParam
 	client *rpc.Client
 }
 
@@ -33,7 +33,7 @@ func (worker *Worker) SendTask(args *common.SendTaskArgs, reply *common.SendTask
 		log.Fatal("already process task!")
 	}
 
-	worker.params = args.Params
+	worker.param = args.Param
 	worker.taskId = args.TaskId
 	go worker.DoTask()
 
