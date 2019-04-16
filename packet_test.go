@@ -10,6 +10,6 @@ func assertEqual(t *testing.T, a interface{}, b interface{}) {
 
 func TestIsAlive(t *testing.T) {
 	ip := "172.217.10.14"
-	s := isAlive(ip)
+	s := IsAlive(ip)
 	assertEqual(t, len(s), 1)
 }

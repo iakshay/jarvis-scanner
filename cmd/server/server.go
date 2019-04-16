@@ -3,6 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math"
+	"io/ioutil"
+	"strings"
 	"strconv"
 	common "github.com/iakshay/jarvis-scanner"
 	"github.com/jinzhu/gorm"
@@ -62,8 +65,8 @@ type Server struct {
 type JobType int
 
 const (
-isAlive	JobType = 1
-portScan JobType = 2
+	isAlive  JobType = 1
+	portScan JobType = 2
 )
 
 func (server *Server) RegisterWorker(args *common.RegisterWorkerArgs, reply *common.RegisterWorkerReply) error {
@@ -112,7 +115,7 @@ func (server *Server) startTask() {
 
 	for id, client := range server.connections {
 		fmt.Printf("sending task to worker id: %d \n", id)
-		args := &common.SendTaskArgs{Params: "Simple Task", TaskId: 1}
+		args := &common.SendTaskArgs{Param: common.TaskParam{}, TaskId: 1}
 		var reply common.SendTaskReply
 		client.Call("Worker.SendTask", args, reply)
 		break
@@ -156,6 +159,42 @@ type Context struct {
 	Request  *http.Request
 	Server   *Server
 	Params   []string
+}
+
+func ipTo32Bit(ipArray []string) int {
+	total := 0
+	power := 0
+
+	for _, str := range ipArray {
+		num := strconv.Atoi(str)
+		shift := math.Pow(2, power)
+		total += (num * shift)
+		power += 8
+	}
+
+	return num
+}
+
+func bitsToIP(value int) []string {
+	var strings []string
+	divisor := math.Pow(2, 32)
+	var ipArray []string
+
+	for i := 0; i < 4; i++ {
+		section := 0
+		for j := 0; j < 8; j++ {
+			quotient := value/divisor
+			if quotient == 1 {
+				section += value
+			}
+			value := math.Mod(value, divisor)
+			divisor = divisor - 1
+		}
+		strings = append(strings, strconv.Itoa(section))
+	}
+
+	return strings
+
 }
 
 func (s *Server) handleJobs(ctx *Context) {
@@ -215,18 +254,43 @@ func (s *Server) handleJobs(ctx *Context) {
 		s := string(b)
 		spl := strings.Split(s, ", ")
 		fullType := strings.Split(spl[1], ":")
+=======
+		// Akshay - commented below cause since it was causing build failure
+		//b, err := ioutil.ReadAll(r.Body)
+		//if err != nil {
+		//log.Fatal(err)
+		//}
+		//s := string(b)
+		//spl := strings.Split(s, ", ")
+		//fullType := strings.Split(spl[1], ":")
+>>>>>>> f93fab868702c2db996c3d0d46b3395260a939b4
 
 		// The code representing the type of scan the client tells us to perform
 		// "1" for isAlive, "2" for scanning of ports
-		typeVal := strconv.Atoi(fullType[1][1])
+		//typeVal := strconv.Atoi(fullType[1][1])
 
+<<<<<<< HEAD
 //		workerCount := db.
+=======
+		var workerCount int
+		db.Table("workers").Count(&workerCount)
+>>>>>>> f93fab868702c2db996c3d0d46b3395260a939b4
 
 		if typVal == isAlive {
 			fullIPRange := strings.Split(spl[0], ":")
 			length := len(fullIPRange[1])
 			ipRangeVal := fullIPRange[1][1:(length - 1)]
-			
+			splitIPRange := strings.Split(ipRangeVal, "/")
+
+			// Will allow us to control the range of IPs to which each worker can be assigned
+			baseAddress := strings.Split(splitIPRange[0], ".")
+			addrIntVal := ipTo32Bit(baseAddress)
+
+			setBits := strconv.Atoi(splitIPRange[1])
+			subnetSize := math.Pow(2, 32 - setBits)
+			quotientWork := subnetSize/workerCount
+			remainderWork := math.Mod(subnetSize, workerCount)
+
 		} else {
 
 		}
@@ -268,24 +332,24 @@ func main() {
 	db.AutoMigrate(&Task{})
 	db.AutoMigrate(&Worker{})
 
-/*	for i:= 0; i < 2; i++ {
-		var tasks []Task
-		for j:= 0; j < 3; j++ {
-			worker := new(Worker)
-			task := new(Task)
-			params := "Task" + strconv.Itoa(j)
-			task.Params = params
-			task.Worker = *worker
-			task.State = Queued
-			db.Create(task)
-			db.Create(worker)
-			tasks = append(tasks, *task)
-		}
-                db.Create(&Job{
-                        Params: fmt.Sprintf("FooBar %d", i),
-                        Tasks: tasks,
-                })
-        }*/
+	/*	for i:= 0; i < 2; i++ {
+				var tasks []Task
+				for j:= 0; j < 3; j++ {
+					worker := new(Worker)
+					task := new(Task)
+					params := "Task" + strconv.Itoa(j)
+					task.Params = params
+					task.Worker = *worker
+					task.State = Queued
+					db.Create(task)
+					db.Create(worker)
+					tasks = append(tasks, *task)
+				}
+		                db.Create(&Job{
+		                        Params: fmt.Sprintf("FooBar %d", i),
+		                        Tasks: tasks,
+		                })
+		        }*/
 
 	server := new(Server)
 	server.db = db
