@@ -3,8 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
-	"strings"
 	"strconv"
 	common "github.com/iakshay/jarvis-scanner"
 	"github.com/jinzhu/gorm"
@@ -15,7 +13,6 @@ import (
 	"net/http"
 	"net/rpc"
 	"regexp"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -210,7 +207,7 @@ func (s *Server) handleJobs(ctx *Context) {
 		}
 		return
 	case "POST":
-		b, err := ioutil.ReadAll(r.Body)
+		/*b, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -223,7 +220,7 @@ func (s *Server) handleJobs(ctx *Context) {
 		// "1" for isAlive, "2" for scanning of ports
 		typeVal := strconv.Atoi(fullType[1][1])
 
-		workerCount := db.
+//		workerCount := db.
 
 		if typVal == isAlive {
 			fullIPRange := strings.Split(spl[0], ":")
@@ -233,7 +230,7 @@ func (s *Server) handleJobs(ctx *Context) {
 		} else {
 
 		}
-		io.WriteString(w, s)
+		io.WriteString(w, s)*/
 		return
 	}
 
