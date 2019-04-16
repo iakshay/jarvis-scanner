@@ -1,6 +1,7 @@
 package common
 
 import "errors"
+import "net"
 
 type TaskType int
 type PortScanType int
@@ -17,34 +18,57 @@ const (
 	FinScan    PortScanType = 2
 )
 
+type IpRange struct {
+	Start net.IP
+	End   net.IP
+}
+
 type PortRange struct {
 	Start uint16
 	End   uint16
 }
 
+//
+// IsAlive param
 type IsAliveParam struct {
-	IpBlock string
+	IpRange IpRange
 }
 
+//
+// PortScan param
 type PortScanParam struct {
-	SubType PortScanType
-	IpBlock string
-	Ports   PortRange
+	Type      PortScanType
+	Ip        net.IP
+	PortRange PortRange
 }
 
+//
+// generic task param
 type TaskParam struct {
 	Type TaskType
 	Data TaskData
 }
 
+//
+// validate IsAliveParam
 func (param *IsAliveParam) Validate() error {
 	return nil
 }
 
+//
+// validate PortScanParam
 func (param *PortScanParam) Validate() error {
+	if param.Type != NormalScan || param.Type != SynScan || param.Type != FinScan {
+		return errors.New("Invalid port scan type")
+	}
+	if param.PortRange.Start < 0 || param.PortRange.End < 0 || param.PortRange.Start > param.PortRange.End {
+		return errors.New("Invalid port port range")
+	}
 	return nil
 }
 
+//
+// validate TaskParam
 func (param *TaskParam) Validate() error {
 	switch param.Type {
 	case IsAliveTask:
