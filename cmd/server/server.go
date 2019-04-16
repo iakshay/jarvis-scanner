@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math"
 	"io/ioutil"
 	"strings"
 	"strconv"
@@ -161,6 +162,42 @@ type Context struct {
 	Params   []string
 }
 
+func ipTo32Bit(ipArray []string) int {
+	total := 0
+	power := 0
+
+	for _, str := range ipArray {
+		num := strconv.Atoi(str)
+		shift := math.Pow(2, power)
+		total += (num * shift)
+		power += 8
+	}
+
+	return num
+}
+
+func bitsToIP(value int) []string {
+	var strings []string
+	divisor := math.Pow(2, 32)
+	var ipArray []string
+
+	for i := 0; i < 4; i++ {
+		section := 0
+		for j := 0; j < 8; j++ {
+			quotient := value/divisor
+			if quotient == 1 {
+				section += value
+			}
+			value := math.Mod(value, divisor)
+			divisor = divisor - 1
+		}
+		strings = append(strings, strconv.Itoa(section))
+	}
+
+	return strings
+
+}
+
 func (s *Server) handleJobs(ctx *Context) {
 	r := ctx.Request
 	w := ctx.Response
@@ -223,17 +260,29 @@ func (s *Server) handleJobs(ctx *Context) {
 		// "1" for isAlive, "2" for scanning of ports
 		typeVal := strconv.Atoi(fullType[1][1])
 
-		workerCount := db.
+		var workerCount int
+		db.Table("workers").Count(&workerCount)
 
 		if typVal == isAlive {
 			fullIPRange := strings.Split(spl[0], ":")
 			length := len(fullIPRange[1])
 			ipRangeVal := fullIPRange[1][1:(length - 1)]
-			
+			splitIPRange := strings.Split(ipRangeVal, "/")
+
+			// Will allow us to control the range of IPs to which each worker can be assigned
+			baseAddress := strings.Split(splitIPRange[0], ".")
+			addrIntVal := ipTo32Bit(baseAddress)
+
+			setBits := strconv.Atoi(splitIPRange[1])
+			subnetSize := math.Pow(2, 32 - setBits)
+			quotientWork := subnetSize/workerCount
+			remainderWork := math.Mod(subnetSize, workerCount)
+
 		} else {
 
 		}
 		io.WriteString(w, s)
+		io.WriteString(w, workerCount)
 		return
 	}
 
