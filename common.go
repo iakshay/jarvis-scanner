@@ -7,6 +7,19 @@ type TaskType int
 type PortScanType int
 type TaskData interface{}
 
+func (scantype PortScanType) String() string {
+	switch scantype {
+	case NormalScan:
+		return "NormalScan"
+	case SynScan:
+		return "SynScan"
+	case FinScan:
+		return "FinScan"
+	default:
+		panic("invalid scan type")
+	}
+}
+
 const (
 	IsAliveTask  TaskType = 0
 	PortScanTask TaskType = 1
@@ -58,9 +71,9 @@ func (param *IsAliveParam) Validate() error {
 //
 // validate PortScanParam
 func (param *PortScanParam) Validate() error {
-	if param.Type != NormalScan || param.Type != SynScan || param.Type != FinScan {
+	/*if param.Type != NormalScan || param.Type != SynScan || param.Type != FinScan {
 		return errors.New("Invalid port scan type")
-	}
+	}*/
 	if param.PortRange.Start < 0 || param.PortRange.End < 0 || param.PortRange.Start > param.PortRange.End {
 		return errors.New("Invalid port port range")
 	}
