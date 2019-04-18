@@ -1,10 +1,13 @@
 package common
 
 import "errors"
+import "strings"
 import "net"
 
 type TaskType int
 type PortScanType int
+type PortStatus int
+type IpStatus int
 type TaskData interface{}
 
 func (scantype PortScanType) String() string {
@@ -18,6 +21,40 @@ func (scantype PortScanType) String() string {
 	default:
 		panic("invalid scan type")
 	}
+}
+
+const (
+	IpAlive IpStatus = 0
+	IsDead  IpStatus = 1
+)
+
+const (
+	PortOpen       PortStatus = 1 << 0
+	PortClosed     PortStatus = 1 << 1
+	PortFiltered   PortStatus = 1 << 2
+	PortUnfiltered PortStatus = 1 << 3
+)
+
+func (portStatus PortStatus) String() string {
+	var status []string
+
+	if (portStatus & PortOpen) != 0 {
+		status = append(status, "Open")
+	}
+
+	if (portStatus & PortClosed) != 0 {
+		status = append(status, "Closed")
+	}
+
+	if (portStatus & PortFiltered) != 0 {
+		status = append(status, "Filtered")
+	}
+
+	if (portStatus & PortUnfiltered) != 0 {
+		status = append(status, "Unfiltered")
+	}
+
+	return strings.Join(status, "|")
 }
 
 const (
@@ -36,9 +73,20 @@ type IpRange struct {
 	End   net.IP
 }
 
+type IpResult struct {
+	Ip     net.IP
+	Status IpStatus
+}
+
 type PortRange struct {
 	Start uint16
 	End   uint16
+}
+
+type PortResult struct {
+	Port   uint16
+	Status PortStatus
+	Banner string
 }
 
 //
@@ -48,11 +96,23 @@ type IsAliveParam struct {
 }
 
 //
+// IsAlive result
+type IsAliveResult struct {
+	Result []IpResult
+}
+
+//
 // PortScan param
 type PortScanParam struct {
 	Type      PortScanType
 	Ip        net.IP
 	PortRange PortRange
+}
+
+//
+// PortScan result
+type PortScanResult struct {
+	Result []PortResult
 }
 
 //
@@ -120,7 +180,7 @@ type RegisterWorkerReply struct {
 
 type CompleteTaskArgs struct {
 	TaskId int
-	Result string
+	Result TaskData
 }
 
 type CompleteTaskReply struct{}

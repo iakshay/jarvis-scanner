@@ -44,11 +44,14 @@ type scanner struct {
 	buf  gopacket.SerializeBuffer
 
 	scantype PortScanType
+
+	portRange PortRange
+	result    []PortResult
 }
 
 // newScanner creates a new scanner for a given destination IP address, using
 // router to determine how to route packets to that IP.
-func newScanner(ip net.IP, router routing.Router, scantype PortScanType) (*scanner, error) {
+func newScanner(ip net.IP, router routing.Router, scantype PortScanType, portRange PortRange) (*scanner, error) {
 	s := &scanner{
 		dst: ip,
 		opts: gopacket.SerializeOptions{
@@ -63,7 +66,7 @@ func newScanner(ip net.IP, router routing.Router, scantype PortScanType) (*scann
 		return nil, err
 	}
 	log.Printf("scanning (%v), ip %v with interface %v, gateway %v, src %v", scantype, ip, iface.Name, gw, src)
-	s.gw, s.src, s.iface, s.scantype = gw, src, iface, scantype
+	s.gw, s.src, s.iface, s.scantype, s.portRange = gw, src, iface, scantype, portRange
 
 	// Open the handle for reading/writing.
 	// Note we could very easily add some BPF filtering here to greatly
@@ -159,7 +162,7 @@ func (s *scanner) scan() error {
 	}
 	tcp := layers.TCP{
 		SrcPort: 54321,
-		DstPort: 0, // will be incremented during the scan
+		DstPort: layers.TCPPort(s.portRange.Start), // will be incremented during the scan
 		SYN:     true,
 	}
 
@@ -177,7 +180,7 @@ func (s *scanner) scan() error {
 	for {
 		// Send one packet per loop iteration until we've sent packets
 		// to all of ports [1, 65535].
-		if tcp.DstPort < 65535 {
+		if tcp.DstPort < layers.TCPPort(s.portRange.End) {
 			start = time.Now()
 			tcp.DstPort++
 			if err := s.send(&eth, &ip4, &tcp); err != nil {
@@ -219,8 +222,10 @@ func (s *scanner) scan() error {
 			// log.Printf("dst port %v does not match", tcp.DstPort)
 		} else if tcp.RST {
 			log.Printf("  port %v closed", tcp.SrcPort)
+			s.result = append(s.result, PortResult{Port: uint16(tcp.SrcPort), Status: PortClosed, Banner: ""})
 		} else if tcp.SYN && tcp.ACK {
 			log.Printf("  port %v open", tcp.SrcPort)
+			s.result = append(s.result, PortResult{Port: uint16(tcp.SrcPort), Status: PortOpen, Banner: ""})
 		} else {
 			// log.Printf("ignoring useless packet")
 		}
@@ -234,4 +239,8 @@ func (s *scanner) send(l ...gopacket.SerializableLayer) error {
 		return err
 	}
 	return s.handle.WritePacketData(s.buf.Bytes())
+}
+
+func (s *scanner) response() []PortResult {
+	return s.result
 }
