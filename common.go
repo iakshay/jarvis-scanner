@@ -10,22 +10,9 @@ type PortStatus int
 type IpStatus int
 type TaskData interface{}
 
-func (scantype PortScanType) String() string {
-	switch scantype {
-	case NormalScan:
-		return "NormalScan"
-	case SynScan:
-		return "SynScan"
-	case FinScan:
-		return "FinScan"
-	default:
-		panic("invalid scan type")
-	}
-}
-
 const (
 	IpAlive IpStatus = 0
-	IsDead  IpStatus = 1
+	IpDead  IpStatus = 1
 )
 
 const (
