@@ -3,19 +3,19 @@ package main
 import (
 	"flag"
 	"fmt"
-	"math"
-	"io/ioutil"
-	"strings"
-	"strconv"
 	common "github.com/iakshay/jarvis-scanner"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"io"
+	"io/ioutil"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"net/rpc"
 	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -115,7 +115,7 @@ func (server *Server) startTask() {
 
 	for id, client := range server.connections {
 		fmt.Printf("sending task to worker id: %d \n", id)
-		args := &common.SendTaskArgs{Param: common.TaskParam{}, TaskId: 1}
+		args := &common.SendTaskArgs{TaskData: common.IsAliveParam{}, TaskType: common.IsAliveTask, TaskId: 1}
 		var reply common.SendTaskReply
 		client.Call("Worker.SendTask", args, reply)
 		break
@@ -183,7 +183,7 @@ func bitsToIP(value int) []string {
 	for i := 0; i < 4; i++ {
 		section := 0
 		for j := 0; j < 8; j++ {
-			quotient := value/divisor
+			quotient := value / divisor
 			if quotient == 1 {
 				section += value
 			}
@@ -247,54 +247,54 @@ func (s *Server) handleJobs(ctx *Context) {
 		return
 	case "POST":
 		/*b, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			log.Fatal(err)
-		}
+				if err != nil {
+					log.Fatal(err)
+				}
 
-		s := string(b)
-		spl := strings.Split(s, ", ")
-		fullType := strings.Split(spl[1], ":")
-=======
-		// Akshay - commented below cause since it was causing build failure
-		//b, err := ioutil.ReadAll(r.Body)
-		//if err != nil {
-		//log.Fatal(err)
-		//}
-		//s := string(b)
-		//spl := strings.Split(s, ", ")
-		//fullType := strings.Split(spl[1], ":")
->>>>>>> f93fab868702c2db996c3d0d46b3395260a939b4
+				s := string(b)
+				spl := strings.Split(s, ", ")
+				fullType := strings.Split(spl[1], ":")
+		=======
+				// Akshay - commented below cause since it was causing build failure
+				//b, err := ioutil.ReadAll(r.Body)
+				//if err != nil {
+				//log.Fatal(err)
+				//}
+				//s := string(b)
+				//spl := strings.Split(s, ", ")
+				//fullType := strings.Split(spl[1], ":")
+		>>>>>>> f93fab868702c2db996c3d0d46b3395260a939b4
 
-		// The code representing the type of scan the client tells us to perform
-		// "1" for isAlive, "2" for scanning of ports
-		//typeVal := strconv.Atoi(fullType[1][1])
+				// The code representing the type of scan the client tells us to perform
+				// "1" for isAlive, "2" for scanning of ports
+				//typeVal := strconv.Atoi(fullType[1][1])
 
-<<<<<<< HEAD
-//		workerCount := db.
-=======
-		var workerCount int
-		db.Table("workers").Count(&workerCount)
->>>>>>> f93fab868702c2db996c3d0d46b3395260a939b4
+		<<<<<<< HEAD
+		//		workerCount := db.
+		=======
+				var workerCount int
+				db.Table("workers").Count(&workerCount)
+		>>>>>>> f93fab868702c2db996c3d0d46b3395260a939b4
 
-		if typVal == isAlive {
-			fullIPRange := strings.Split(spl[0], ":")
-			length := len(fullIPRange[1])
-			ipRangeVal := fullIPRange[1][1:(length - 1)]
-			splitIPRange := strings.Split(ipRangeVal, "/")
+				if typVal == isAlive {
+					fullIPRange := strings.Split(spl[0], ":")
+					length := len(fullIPRange[1])
+					ipRangeVal := fullIPRange[1][1:(length - 1)]
+					splitIPRange := strings.Split(ipRangeVal, "/")
 
-			// Will allow us to control the range of IPs to which each worker can be assigned
-			baseAddress := strings.Split(splitIPRange[0], ".")
-			addrIntVal := ipTo32Bit(baseAddress)
+					// Will allow us to control the range of IPs to which each worker can be assigned
+					baseAddress := strings.Split(splitIPRange[0], ".")
+					addrIntVal := ipTo32Bit(baseAddress)
 
-			setBits := strconv.Atoi(splitIPRange[1])
-			subnetSize := math.Pow(2, 32 - setBits)
-			quotientWork := subnetSize/workerCount
-			remainderWork := math.Mod(subnetSize, workerCount)
+					setBits := strconv.Atoi(splitIPRange[1])
+					subnetSize := math.Pow(2, 32 - setBits)
+					quotientWork := subnetSize/workerCount
+					remainderWork := math.Mod(subnetSize, workerCount)
 
-		} else {
+				} else {
 
-		}
-		io.WriteString(w, s)*/
+				}
+				io.WriteString(w, s)*/
 		return
 	}
 

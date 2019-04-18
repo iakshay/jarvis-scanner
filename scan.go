@@ -46,7 +46,7 @@ type scanner struct {
 	scantype PortScanType
 
 	portRange PortRange
-	result    []PortResult
+	result    map[uint16]PortStatus
 }
 
 // newScanner creates a new scanner for a given destination IP address, using
@@ -68,6 +68,12 @@ func newScanner(ip net.IP, router routing.Router, scantype PortScanType, portRan
 	log.Printf("scanning (%v), ip %v with interface %v, gateway %v, src %v", scantype, ip, iface.Name, gw, src)
 	s.gw, s.src, s.iface, s.scantype, s.portRange = gw, src, iface, scantype, portRange
 
+	s.result = make(map[uint16]PortStatus)
+
+	for i := portRange.Start; i <= portRange.End; i++ {
+		// keeping the default status as filtered
+		s.result[i] = PortFiltered
+	}
 	// Open the handle for reading/writing.
 	// Note we could very easily add some BPF filtering here to greatly
 	// decrease the number of packets we have to look at when getting back
@@ -162,7 +168,7 @@ func (s *scanner) scan() error {
 	}
 	tcp := layers.TCP{
 		SrcPort: 54321,
-		DstPort: layers.TCPPort(s.portRange.Start), // will be incremented during the scan
+		DstPort: layers.TCPPort(s.portRange.Start) - 1, // will be incremented during the scan
 		SYN:     true,
 	}
 
@@ -183,6 +189,7 @@ func (s *scanner) scan() error {
 		if tcp.DstPort < layers.TCPPort(s.portRange.End) {
 			start = time.Now()
 			tcp.DstPort++
+			log.Printf("sending %d", tcp.DstPort)
 			if err := s.send(&eth, &ip4, &tcp); err != nil {
 				log.Printf("error sending to port %v: %v", tcp.DstPort, err)
 			}
@@ -194,8 +201,10 @@ func (s *scanner) scan() error {
 		}
 
 		// Read in the next packet.
+		log.Printf("reading %d", tcp.DstPort)
 		data, _, err := s.handle.ReadPacketData()
 		if err == pcap.NextErrorTimeoutExpired {
+			log.Printf("pcap timeout")
 			continue
 		} else if err != nil {
 			log.Printf("error reading packet: %v", err)
@@ -222,10 +231,10 @@ func (s *scanner) scan() error {
 			// log.Printf("dst port %v does not match", tcp.DstPort)
 		} else if tcp.RST {
 			log.Printf("  port %v closed", tcp.SrcPort)
-			s.result = append(s.result, PortResult{Port: uint16(tcp.SrcPort), Status: PortClosed, Banner: ""})
-		} else if tcp.SYN && tcp.ACK {
+			s.result[uint16(tcp.SrcPort)] = PortClosed
+		} else if s.scantype == SynScan && tcp.SYN && tcp.ACK {
 			log.Printf("  port %v open", tcp.SrcPort)
-			s.result = append(s.result, PortResult{Port: uint16(tcp.SrcPort), Status: PortOpen, Banner: ""})
+			s.result[uint16(tcp.SrcPort)] = PortOpen
 		} else {
 			// log.Printf("ignoring useless packet")
 		}
@@ -241,6 +250,14 @@ func (s *scanner) send(l ...gopacket.SerializableLayer) error {
 	return s.handle.WritePacketData(s.buf.Bytes())
 }
 
-func (s *scanner) response() []PortResult {
+func (s *scanner) response() map[uint16]PortStatus {
+
+	if s.scantype == FinScan {
+		for idx := range s.result {
+			if s.result[idx] == PortFiltered {
+				s.result[idx] |= PortOpen
+			}
+		}
+	}
 	return s.result
 }

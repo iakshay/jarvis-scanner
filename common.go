@@ -173,7 +173,8 @@ type CompleteTaskArgs struct {
 type CompleteTaskReply struct{}
 
 type SendTaskArgs struct {
-	TaskId int
-	Param  TaskParam
+	TaskId   int
+	TaskType TaskType
+	TaskData TaskData
 }
 type SendTaskReply struct{}
