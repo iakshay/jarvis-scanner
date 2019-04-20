@@ -1,4 +1,3 @@
-// +build test
 // Copyright 2012 Google, Inc. All rights reserved.
 //
 // Use of this source code is governed by a BSD-style license
@@ -16,17 +15,15 @@
 // simple timeout logic with time.Since.
 //
 // Making it blazingly fast is left as an exercise to the reader.
-package main
+package common
 
 import (
 	"errors"
-	"flag"
 	"log"
 	"net"
 	"time"
 
 	"github.com/google/gopacket"
-	"github.com/google/gopacket/examples/util"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/routing"
@@ -45,11 +42,16 @@ type scanner struct {
 	// method.
 	opts gopacket.SerializeOptions
 	buf  gopacket.SerializeBuffer
+
+	scantype PortScanType
+
+	portRange PortRange
+	result    map[uint16]PortStatus
 }
 
 // newScanner creates a new scanner for a given destination IP address, using
 // router to determine how to route packets to that IP.
-func newScanner(ip net.IP, router routing.Router) (*scanner, error) {
+func newScanner(ip net.IP, router routing.Router, scantype PortScanType, portRange PortRange) (*scanner, error) {
 	s := &scanner{
 		dst: ip,
 		opts: gopacket.SerializeOptions{
@@ -63,9 +65,15 @@ func newScanner(ip net.IP, router routing.Router) (*scanner, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("scanning ip %v with interface %v, gateway %v, src %v", ip, iface.Name, gw, src)
-	s.gw, s.src, s.iface = gw, src, iface
+	log.Printf("scanning (%v), ip %v with interface %v, gateway %v, src %v", scantype, ip, iface.Name, gw, src)
+	s.gw, s.src, s.iface, s.scantype, s.portRange = gw, src, iface, scantype, portRange
 
+	s.result = make(map[uint16]PortStatus)
+
+	for i := portRange.Start; i <= portRange.End; i++ {
+		// keeping the default status as filtered
+		s.result[i] = PortFiltered
+	}
 	// Open the handle for reading/writing.
 	// Note we could very easily add some BPF filtering here to greatly
 	// decrease the number of packets we have to look at when getting back
@@ -140,6 +148,7 @@ func (s *scanner) getHwAddr() (net.HardwareAddr, error) {
 // scan scans the dst IP address of this scanner.
 func (s *scanner) scan() error {
 	// First off, get the MAC address we should be sending packets to.
+	log.Print("get hw addr")
 	hwaddr, err := s.getHwAddr()
 	if err != nil {
 		return err
@@ -159,8 +168,14 @@ func (s *scanner) scan() error {
 	}
 	tcp := layers.TCP{
 		SrcPort: 54321,
-		DstPort: 0, // will be incremented during the scan
+		DstPort: layers.TCPPort(s.portRange.Start) - 1, // will be incremented during the scan
 		SYN:     true,
+	}
+
+	if s.scantype == SynScan {
+		tcp.SYN = true
+	} else if s.scantype == FinScan {
+		tcp.FIN = true
 	}
 	tcp.SetNetworkLayerForChecksum(&ip4)
 
@@ -171,9 +186,10 @@ func (s *scanner) scan() error {
 	for {
 		// Send one packet per loop iteration until we've sent packets
 		// to all of ports [1, 65535].
-		if tcp.DstPort < 65535 {
+		if tcp.DstPort < layers.TCPPort(s.portRange.End) {
 			start = time.Now()
 			tcp.DstPort++
+			log.Printf("sending %d", tcp.DstPort)
 			if err := s.send(&eth, &ip4, &tcp); err != nil {
 				log.Printf("error sending to port %v: %v", tcp.DstPort, err)
 			}
@@ -185,8 +201,10 @@ func (s *scanner) scan() error {
 		}
 
 		// Read in the next packet.
+		log.Printf("reading %d", tcp.DstPort)
 		data, _, err := s.handle.ReadPacketData()
 		if err == pcap.NextErrorTimeoutExpired {
+			log.Printf("pcap timeout")
 			continue
 		} else if err != nil {
 			log.Printf("error reading packet: %v", err)
@@ -213,12 +231,15 @@ func (s *scanner) scan() error {
 			// log.Printf("dst port %v does not match", tcp.DstPort)
 		} else if tcp.RST {
 			log.Printf("  port %v closed", tcp.SrcPort)
-		} else if tcp.SYN && tcp.ACK {
+			s.result[uint16(tcp.SrcPort)] = PortClosed
+		} else if s.scantype == SynScan && tcp.SYN && tcp.ACK {
 			log.Printf("  port %v open", tcp.SrcPort)
+			s.result[uint16(tcp.SrcPort)] = PortOpen
 		} else {
 			// log.Printf("ignoring useless packet")
 		}
 	}
+	return nil
 }
 
 // send sends the given layers as a single packet on the network.
@@ -229,32 +250,14 @@ func (s *scanner) send(l ...gopacket.SerializableLayer) error {
 	return s.handle.WritePacketData(s.buf.Bytes())
 }
 
-func main() {
-	defer util.Run()()
-	router, err := routing.New()
-	if err != nil {
-		log.Fatal("routing error:", err)
+func (s *scanner) response() map[uint16]PortStatus {
+
+	if s.scantype == FinScan {
+		for idx := range s.result {
+			if s.result[idx] == PortFiltered {
+				s.result[idx] |= PortOpen
+			}
+		}
 	}
-	for _, arg := range flag.Args() {
-		var ip net.IP
-		if ip = net.ParseIP(arg); ip == nil {
-			log.Printf("non-ip target: %q", arg)
-			continue
-		} else if ip = ip.To4(); ip == nil {
-			log.Printf("non-ipv4 target: %q", arg)
-			continue
-		}
-		// Note:  newScanner creates and closes a pcap Handle once for
-		// every scan target.  We could do much better, were this not an
-		// example ;)
-		s, err := newScanner(ip, router)
-		if err != nil {
-			log.Printf("unable to create scanner for %v: %v", ip, err)
-			continue
-		}
-		if err := s.scan(); err != nil {
-			log.Printf("unable to scan %v: %v", ip, err)
-		}
-		s.close()
-	}
+	return s.result
 }

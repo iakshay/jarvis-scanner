@@ -22,6 +22,12 @@
   go get -u golang.org/x/net/ipv4
   go get -u golang.org/x/net/icmp
 
+  # testing
+  go get -u github.com/stretchr/testify
+
+  # generate strings
+  go get -u golang.org/x/tools/cmd/stringer
+
   # build and install worker and server
   go install ./...
 

@@ -1,11 +1,48 @@
 package common
 
 import "errors"
+import "strings"
 import "net"
 
 type TaskType int
 type PortScanType int
+type PortStatus int
+type IpStatus int
 type TaskData interface{}
+
+const (
+	IpAlive IpStatus = 0
+	IpDead  IpStatus = 1
+)
+
+const (
+	PortOpen       PortStatus = 1 << 0
+	PortClosed     PortStatus = 1 << 1
+	PortFiltered   PortStatus = 1 << 2
+	PortUnfiltered PortStatus = 1 << 3
+)
+
+func (portStatus PortStatus) String() string {
+	var status []string
+
+	if (portStatus & PortOpen) != 0 {
+		status = append(status, "Open")
+	}
+
+	if (portStatus & PortClosed) != 0 {
+		status = append(status, "Closed")
+	}
+
+	if (portStatus & PortFiltered) != 0 {
+		status = append(status, "Filtered")
+	}
+
+	if (portStatus & PortUnfiltered) != 0 {
+		status = append(status, "Unfiltered")
+	}
+
+	return strings.Join(status, "|")
+}
 
 const (
 	IsAliveTask  TaskType = 0
@@ -23,9 +60,20 @@ type IpRange struct {
 	End   net.IP
 }
 
+type IpResult struct {
+	Ip     net.IP
+	Status IpStatus
+}
+
 type PortRange struct {
 	Start uint16
 	End   uint16
+}
+
+type PortResult struct {
+	Port   uint16
+	Status PortStatus
+	Banner string
 }
 
 //
@@ -35,11 +83,23 @@ type IsAliveParam struct {
 }
 
 //
+// IsAlive result
+type IsAliveResult struct {
+	Result []IpResult
+}
+
+//
 // PortScan param
 type PortScanParam struct {
 	Type      PortScanType
 	Ip        net.IP
 	PortRange PortRange
+}
+
+//
+// PortScan result
+type PortScanResult struct {
+	Result []PortResult
 }
 
 //
@@ -58,9 +118,9 @@ func (param *IsAliveParam) Validate() error {
 //
 // validate PortScanParam
 func (param *PortScanParam) Validate() error {
-	if param.Type != NormalScan || param.Type != SynScan || param.Type != FinScan {
+	/*if param.Type != NormalScan || param.Type != SynScan || param.Type != FinScan {
 		return errors.New("Invalid port scan type")
-	}
+	}*/
 	if param.PortRange.Start < 0 || param.PortRange.End < 0 || param.PortRange.Start > param.PortRange.End {
 		return errors.New("Invalid port port range")
 	}
@@ -107,13 +167,14 @@ type RegisterWorkerReply struct {
 
 type CompleteTaskArgs struct {
 	TaskId int
-	Result string
+	Result TaskData
 }
 
 type CompleteTaskReply struct{}
 
 type SendTaskArgs struct {
-	TaskId int
-	Param  TaskParam
+	TaskId   int
+	TaskType TaskType
+	TaskData TaskData
 }
 type SendTaskReply struct{}
