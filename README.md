@@ -37,3 +37,14 @@
   # Running server ($GOPATH/bin/server) 
   server
 ```
+
+To start the frontend server
+
+```
+  Install Node and NPM
+  cd ui/
+  # install dependencies
+  npm install
+  # start server
+  npm start
+```
