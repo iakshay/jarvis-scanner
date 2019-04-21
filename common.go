@@ -116,14 +116,14 @@ type JobIsAliveParam struct {
 
 type JobPortScanParam struct {
 	Ip    string
-	Mode  PortScanType
+	Mode  string // PortScanType
 	Range PortRange
 }
 
 //
 // generic job param
 type JobSubmitParam struct {
-	Type TaskType
+	Type string // TaskType
 	// should be JobIsAliveParam or JobPortScanParam
 	Data JobSubmitData
 }
@@ -134,6 +134,7 @@ type JobSubmitReply struct{}
 type JobListParam struct{}
 type JobInfo struct {
 	JobId int
+	Type  string // TaskType
 	Data  JobSubmitData
 }
 type JobListReply struct {
