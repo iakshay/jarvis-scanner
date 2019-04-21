@@ -9,6 +9,7 @@ type PortScanType int
 type PortStatus int
 type IpStatus int
 type TaskData interface{}
+type JobSubmitData interface{}
 
 const (
 	IpAlive IpStatus = 0
@@ -109,9 +110,56 @@ type TaskParam struct {
 	Data TaskData
 }
 
+type JobIsAliveParam struct {
+	IpBlock string
+}
+
+type JobPortScanParam struct {
+	Ip    string
+	Mode  PortScanType
+	Range PortRange
+}
+
+//
+// generic job param
+type JobSubmitParam struct {
+	Type TaskType
+	// should be JobIsAliveParam or JobPortScanParam
+	Data JobSubmitData
+}
+
+type JobSubmitReply struct{}
+
+// list
+type JobListParam struct{}
+type JobInfo struct {
+	JobId int
+	Data  JobSubmitData
+}
+type JobListReply struct {
+	Jobs []JobInfo
+}
+
+// detail
+type JobDetailParam struct {
+	JobId int
+}
+
+type WorkerTaskData struct {
+	WorkerId   int
+	WorkerName string
+	Data       TaskData
+}
+
+type JobDetailReply struct {
+	JobId int
+	Data  []WorkerTaskData
+}
+
 //
 // validate IsAliveParam
 func (param *IsAliveParam) Validate() error {
+	// validate ipBlock or single IP
 	return nil
 }
 
