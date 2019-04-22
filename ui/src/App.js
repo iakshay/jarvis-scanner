@@ -2,10 +2,6 @@ import React, { Component } from 'react';
 import { BrowserRouter as Router, Route, Link } from "react-router-dom";
 
 class JobSnippet extends Component {
-  constructor(props) {
-    super(props);
-  }
-
   render() {
       return (<div className="job-snippet row mb-10 p-3">
       <div className="col-10">
@@ -23,10 +19,6 @@ class JobSnippet extends Component {
 }
 
 class TaskView extends Component {
-  constructor(props) {
-    super(props);
-  }
-
   render() {
       return (<div>{JSON.stringify(this.props.data)}</div>)
   }
