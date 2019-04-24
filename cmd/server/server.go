@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"encoding/json"
 	common "github.com/iakshay/jarvis-scanner"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
@@ -32,7 +33,7 @@ type Task struct {
 	Id          int
 	JobId       int
 	State       TaskState
-	Params      string
+	Params      []byte	// Allows for UnMarshalling to struct objects, as needed
 	WorkerId    int
 	Worker      Worker `gorm:"foreignkey:TaskId; association_foreignkey:Id"`
 	Result      string
@@ -42,7 +43,7 @@ type Task struct {
 
 type Job struct {
 	Id     int
-	Params string
+	Params []byte
 	Tasks  []Task `gorm:"foreignkey:JobId;association_foreignkey:Id"`
 }
 
@@ -61,13 +62,6 @@ type Server struct {
 	connections map[int]*rpc.Client
 	Routes      []Route
 }
-
-type JobType int
-
-const (
-	isAlive  JobType = 1
-	portScan JobType = 2
-)
 
 func (server *Server) RegisterWorker(args *common.RegisterWorkerArgs, reply *common.RegisterWorkerReply) error {
 	fmt.Println("Register worker", args)
@@ -161,39 +155,36 @@ type Context struct {
 	Params   []string
 }
 
-func ipTo32Bit(ipArray []string) int {
+func ipTo32Bit(IP net.IP) int {
 	total := 0
 	power := 0
 
-	for _, str := range ipArray {
-		num := strconv.Atoi(str)
+	for _, level := range ipArray {
 		shift := math.Pow(2, power)
-		total += (num * shift)
+		total += (level * shift)
 		power += 8
 	}
 
 	return num
 }
 
-func bitsToIP(value int) []string {
-	var strings []string
+func bitsToIP(value int) net.IP {
+	arr := make([]int, 4)
 	divisor := math.Pow(2, 32)
-	var ipArray []string
 
 	for i := 0; i < 4; i++ {
 		section := 0
 		for j := 0; j < 8; j++ {
 			quotient := value / divisor
 			if quotient == 1 {
-				section += value
+				section += math.Pow(2, j)
 			}
-			value := math.Mod(value, divisor)
-			divisor = divisor - 1
+			divisor = divisor/2
 		}
-		strings = append(strings, strconv.Itoa(section))
+		arr[i] = section
 	}
 
-	return strings
+	return net.IPv4(arr[0], arr[1], arr[2], arr[3])
 
 }
 
@@ -246,55 +237,84 @@ func (s *Server) handleJobs(ctx *Context) {
 		}
 		return
 	case "POST":
-		/*b, err := ioutil.ReadAll(r.Body)
+		b, err := ioutil.ReadAll(r.Body)
 				if err != nil {
 					log.Fatal(err)
 				}
 
-				s := string(b)
-				spl := strings.Split(s, ", ")
-				fullType := strings.Split(spl[1], ":")
-		=======
-				// Akshay - commented below cause since it was causing build failure
-				//b, err := ioutil.ReadAll(r.Body)
-				//if err != nil {
-				//log.Fatal(err)
-				//}
-				//s := string(b)
-				//spl := strings.Split(s, ", ")
-				//fullType := strings.Split(spl[1], ":")
-		>>>>>>> f93fab868702c2db996c3d0d46b3395260a939b4
+				var jobParams JobSubmitParam
+				err = json.Unmarshal(b, &jobParams)
+				if err != nil {
+					log.Fatal(err)
+				}
 
-				// The code representing the type of scan the client tells us to perform
-				// "1" for isAlive, "2" for scanning of ports
-				//typeVal := strconv.Atoi(fullType[1][1])
-
-		<<<<<<< HEAD
-		//		workerCount := db.
-		=======
+				typVal := jobParams.Type
 				var workerCount int
 				db.Table("workers").Count(&workerCount)
-		>>>>>>> f93fab868702c2db996c3d0d46b3395260a939b4
-
-				if typVal == isAlive {
-					fullIPRange := strings.Split(spl[0], ":")
-					length := len(fullIPRange[1])
-					ipRangeVal := fullIPRange[1][1:(length - 1)]
-					splitIPRange := strings.Split(ipRangeVal, "/")
-
-					// Will allow us to control the range of IPs to which each worker can be assigned
-					baseAddress := strings.Split(splitIPRange[0], ".")
-					addrIntVal := ipTo32Bit(baseAddress)
-
-					setBits := strconv.Atoi(splitIPRange[1])
-					subnetSize := math.Pow(2, 32 - setBits)
+				tasks := make([]Task, workerCount)
+				if typVal == IsAliveJob {
+					IPSplit := strings.Split(jobParams.IpBlock, "/")
+					// IP struct stores most recent 32-bit IP address in final four bytes of array
+					IPBlock := net.ParseIP(IPSplit[0])[12:16]
+					IPMask := strconv.Atoi(IPSplit[1])
+					subnetSize := math.Pow(2, 32 - IPMask)
 					quotientWork := subnetSize/workerCount
 					remainderWork := math.Mod(subnetSize, workerCount)
+					IP32Rep := ipTo32Bit(IPBlock)
+					for i := 0; i <  workerCount; i++ {
+						nextIP32Base := IP32Rep + quotientWork
+						if remainderWork > 0 {
+							nextIP32Base += 1
+							remainderWork = remainderWork - 1
+						}
+						startIP := bitsToIP(IP32Rep)
+						endIP := bitsToIP(nextIP32Base) - 1
+						IpRange := IpRange{startIP, endIP}
+						taskParamData := IsAliveParam{IpRange}
+						buf, e := json.Marshal(taskParamData)
+						if e != nil {
+							log.Fatal(e)
+						}
+
+						task := Task{Queued, buf}
+						db.Create(&task)
+						tasks[i] = task
+						IP32Rep = nextIP32Base
+					}
 
 				} else {
+					IP := jobParams.Ip
+					Type := jobParams.Type
+					Range := jobParams.Range
+					Start := Range.Start
+					End := Range.End
+					rangeLength := (End - Start) + 1
+					quotientWork := (rangeLength/workerCount) - 1
+					remainderWork := math.Mod(rangeLength, workerCount)
+					currStart := Start
+					var currEnd uint16
+					for i := 0; i < workerCount; i++ {
+						currEnd = currStart + quotientWork 
+						if remainderWork > 0 {
+							currEnd += 1
+							remainderWork = remainderWork - 1
+						}
+						taskRange := PortRange{currStart, currEnd}
+						taskParamData := PortScanParam{Type, IP, taskRange}						
+						buf, e := json.Marshal(taskParamData)
+						if e != nil {
+							log.Fatal(e)
+						}
 
+						currStart = currEnd + 1
+
+						task := Task{Queued, buf}
+						db.Create(&task)
+						tasks[i] = task
+					}
 				}
-				io.WriteString(w, s)*/
+				job := Job{Params: b, Tasks: tasks}
+				db.Create(&job)
 		return
 	}
 

@@ -5,6 +5,7 @@ import "strings"
 import "net"
 
 type TaskType int
+type JobType int
 type PortScanType int
 type PortStatus int
 type IpStatus int
@@ -48,6 +49,11 @@ func (portStatus PortStatus) String() string {
 const (
 	IsAliveTask  TaskType = 0
 	PortScanTask TaskType = 1
+)
+
+const (
+	IsAliveJob JobType = 0
+	PortScanJob JobType = 1
 )
 
 const (
@@ -115,15 +121,15 @@ type JobIsAliveParam struct {
 }
 
 type JobPortScanParam struct {
-	Ip    string
-	Mode  string // PortScanType
+	Ip    net.IP
+	Type  PortScanType
 	Range PortRange
 }
 
 //
 // generic job param
 type JobSubmitParam struct {
-	Type string // TaskType
+	Type JobType
 	// should be JobIsAliveParam or JobPortScanParam
 	Data JobSubmitData
 }
