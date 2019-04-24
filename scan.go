@@ -19,8 +19,10 @@ package common
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/google/gopacket"
@@ -71,10 +73,12 @@ func newScanner(ip net.IP, router routing.Router) (*scanner, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = s.handle.SetBPFFilter("arp or (tcp and port 54321)")
-	if err != nil {
-		log.Fatal(err)
-	}
+	/*
+		  TODO - investigate why BPF filter causes timeout
+		  err = s.handle.SetBPFFilter("arp or (tcp and port 54321)")
+			if err != nil {
+				log.Fatal(err)
+			}*/
 	return s, nil
 }
 
@@ -242,4 +246,25 @@ func (s *scanner) send(l ...gopacket.SerializableLayer) error {
 		return err
 	}
 	return s.handle.WritePacketData(s.buf.Bytes())
+}
+
+func ScanPort(ip string, portRange PortRange, timeout time.Duration) {
+	wg := sync.WaitGroup{}
+	defer wg.Wait()
+
+	for port := portRange.Start; port <= portRange.End; port++ {
+		wg.Add(1)
+		go func(ip string, port uint16) {
+			defer wg.Done()
+			addr := fmt.Sprintf("%s:%d", ip, port)
+			_, err := net.DialTimeout("tcp", addr, timeout)
+
+			if err != nil {
+				log.Println("timeout or closed")
+			} else {
+				log.Println("open")
+			}
+		}(ip, port)
+	}
+
 }

@@ -3,6 +3,7 @@ package common
 import "testing"
 import "log"
 import "net"
+import "time"
 import "github.com/stretchr/testify/assert"
 import "github.com/google/gopacket/routing"
 
@@ -125,7 +126,7 @@ func TestMultipleScan(t *testing.T) {
 	assert.Equal(t, err, nil)
 	s.close()
 
-	assert.Equal(t, 20, len(response))
+	assert.Equal(t, 10, len(response))
 
 	for port, status := range response {
 		if port != 8000 {
@@ -134,4 +135,8 @@ func TestMultipleScan(t *testing.T) {
 			assert.Equal(t, status, PortOpen)
 		}
 	}
+}
+
+func TestNormalScan(t *testing.T) {
+	ScanPort("10.0.0.11", PortRange{7000, 7009}, 3*time.Second)
 }
