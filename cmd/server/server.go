@@ -1,9 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
-	"encoding/json"
 	common "github.com/iakshay/jarvis-scanner"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
@@ -33,7 +33,7 @@ type Task struct {
 	Id          int
 	JobId       int
 	State       TaskState
-	Params      []byte	// Allows for UnMarshalling to struct objects, as needed
+	Params      []byte // Allows for UnMarshalling to struct objects, as needed
 	WorkerId    int
 	Worker      Worker `gorm:"foreignkey:TaskId; association_foreignkey:Id"`
 	Result      string
@@ -179,7 +179,7 @@ func bitsToIP(value int) net.IP {
 			if quotient == 1 {
 				section += math.Pow(2, j)
 			}
-			divisor = divisor/2
+			divisor = divisor / 2
 		}
 		arr[i] = section
 	}
@@ -238,83 +238,83 @@ func (s *Server) handleJobs(ctx *Context) {
 		return
 	case "POST":
 		b, err := ioutil.ReadAll(r.Body)
-				if err != nil {
-					log.Fatal(err)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		var jobParams JobSubmitParam
+		err = json.Unmarshal(b, &jobParams)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		typVal := jobParams.Type
+		var workerCount int
+		db.Table("workers").Count(&workerCount)
+		tasks := make([]Task, workerCount)
+		if typVal == IsAliveJob {
+			IPSplit := strings.Split(jobParams.IpBlock, "/")
+			// IP struct stores most recent 32-bit IP address in final four bytes of array
+			IPBlock := net.ParseIP(IPSplit[0])[12:16]
+			IPMask := strconv.Atoi(IPSplit[1])
+			subnetSize := math.Pow(2, 32-IPMask)
+			quotientWork := subnetSize / workerCount
+			remainderWork := math.Mod(subnetSize, workerCount)
+			IP32Rep := ipTo32Bit(IPBlock)
+			for i := 0; i < workerCount; i++ {
+				nextIP32Base := IP32Rep + quotientWork
+				if remainderWork > 0 {
+					nextIP32Base += 1
+					remainderWork = remainderWork - 1
+				}
+				startIP := bitsToIP(IP32Rep)
+				endIP := bitsToIP(nextIP32Base) - 1
+				IpRange := IpRange{startIP, endIP}
+				taskParamData := IsAliveParam{IpRange}
+				buf, e := json.Marshal(taskParamData)
+				if e != nil {
+					log.Fatal(e)
 				}
 
-				var jobParams JobSubmitParam
-				err = json.Unmarshal(b, &jobParams)
-				if err != nil {
-					log.Fatal(err)
+				task := Task{Queued, buf}
+				db.Create(&task)
+				tasks[i] = task
+				IP32Rep = nextIP32Base
+			}
+
+		} else {
+			IP := jobParams.Ip
+			Type := jobParams.Type
+			Range := jobParams.Range
+			Start := Range.Start
+			End := Range.End
+			rangeLength := (End - Start) + 1
+			quotientWork := (rangeLength / workerCount) - 1
+			remainderWork := math.Mod(rangeLength, workerCount)
+			currStart := Start
+			var currEnd uint16
+			for i := 0; i < workerCount; i++ {
+				currEnd = currStart + quotientWork
+				if remainderWork > 0 {
+					currEnd += 1
+					remainderWork = remainderWork - 1
+				}
+				taskRange := PortRange{currStart, currEnd}
+				taskParamData := PortScanParam{Type, IP, taskRange}
+				buf, e := json.Marshal(taskParamData)
+				if e != nil {
+					log.Fatal(e)
 				}
 
-				typVal := jobParams.Type
-				var workerCount int
-				db.Table("workers").Count(&workerCount)
-				tasks := make([]Task, workerCount)
-				if typVal == IsAliveJob {
-					IPSplit := strings.Split(jobParams.IpBlock, "/")
-					// IP struct stores most recent 32-bit IP address in final four bytes of array
-					IPBlock := net.ParseIP(IPSplit[0])[12:16]
-					IPMask := strconv.Atoi(IPSplit[1])
-					subnetSize := math.Pow(2, 32 - IPMask)
-					quotientWork := subnetSize/workerCount
-					remainderWork := math.Mod(subnetSize, workerCount)
-					IP32Rep := ipTo32Bit(IPBlock)
-					for i := 0; i <  workerCount; i++ {
-						nextIP32Base := IP32Rep + quotientWork
-						if remainderWork > 0 {
-							nextIP32Base += 1
-							remainderWork = remainderWork - 1
-						}
-						startIP := bitsToIP(IP32Rep)
-						endIP := bitsToIP(nextIP32Base) - 1
-						IpRange := IpRange{startIP, endIP}
-						taskParamData := IsAliveParam{IpRange}
-						buf, e := json.Marshal(taskParamData)
-						if e != nil {
-							log.Fatal(e)
-						}
+				currStart = currEnd + 1
 
-						task := Task{Queued, buf}
-						db.Create(&task)
-						tasks[i] = task
-						IP32Rep = nextIP32Base
-					}
-
-				} else {
-					IP := jobParams.Ip
-					Type := jobParams.Type
-					Range := jobParams.Range
-					Start := Range.Start
-					End := Range.End
-					rangeLength := (End - Start) + 1
-					quotientWork := (rangeLength/workerCount) - 1
-					remainderWork := math.Mod(rangeLength, workerCount)
-					currStart := Start
-					var currEnd uint16
-					for i := 0; i < workerCount; i++ {
-						currEnd = currStart + quotientWork 
-						if remainderWork > 0 {
-							currEnd += 1
-							remainderWork = remainderWork - 1
-						}
-						taskRange := PortRange{currStart, currEnd}
-						taskParamData := PortScanParam{Type, IP, taskRange}						
-						buf, e := json.Marshal(taskParamData)
-						if e != nil {
-							log.Fatal(e)
-						}
-
-						currStart = currEnd + 1
-
-						task := Task{Queued, buf}
-						db.Create(&task)
-						tasks[i] = task
-					}
-				}
-				job := Job{Params: b, Tasks: tasks}
-				db.Create(&job)
+				task := Task{Queued, buf}
+				db.Create(&task)
+				tasks[i] = task
+			}
+		}
+		job := Job{Params: b, Tasks: tasks}
+		db.Create(&job)
 		return
 	}
 
@@ -403,48 +403,3 @@ func main() {
 	server.startTask()
 	wg.Wait()
 }
-
-/*func dbMain() {
-
-	// Create
-	var worker Worker
-	db.First(&worker, 0)
-	for i := 0; i < 10; i++ {
-		db.Create(&Job{
-			//State: Queued,
-			Params: fmt.Sprintf("FooBar %d", i),
-			Tasks: []Task{
-				{Params: "Task1", Worker: worker},
-				// {Params: "Task2", Worker: 1},
-			},
-		})
-	}
-
-	// List jobs
-	var jobs []Job
-	db.Find(&jobs)
-	fmt.Println(jobs)
-
-	// Read
-	var job1 Job
-	db.First(&job1, 1) // find product with id 1
-	fmt.Println(job1)
-
-	// Get Tasks
-	var job2 Job
-	db.Preload("Tasks").First(&job2, 1)
-	fmt.Println(job2)
-
-	// check job completed
-	//var tasks []Task
-	//var job3 Job
-	var count int
-	db.Table("tasks").Where("state != ? AND job_id = ?", Complete, 1).Count(&count)
-	//db.First(&job3, 1).Related(&tasks).Where("state != ? AND job_id = ?", Complete, 1).Count(&count);
-	fmt.Println(count)
-
-	// Delete - delete product
-	//db.Delete(&product)
-
-	db.Table("workers").Where("name = ?", "Worker1").Update("heartbeat_time", time.Now())
-}*/
