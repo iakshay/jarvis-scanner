@@ -7,10 +7,10 @@ import (
 	"log"
 	"net"
 	"os"
+	"sync"
 )
 
-func IsAlive(ip string) []string {
-	var s []string
+func Ping(ip net.IP) bool {
 	c, err := icmp.ListenPacket("ip4:icmp", "0.0.0.0")
 	if err != nil {
 		// most likely, need to run tests as root
@@ -29,7 +29,7 @@ func IsAlive(ip string) []string {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if _, err := c.WriteTo(wb, &net.IPAddr{IP: net.ParseIP(ip)}); err != nil {
+	if _, err := c.WriteTo(wb, &net.IPAddr{IP: ip}); err != nil {
 		log.Fatal(err)
 	}
 
@@ -45,13 +45,31 @@ func IsAlive(ip string) []string {
 	switch rm.Type {
 	case ipv4.ICMPTypeEchoReply:
 		log.Printf("got reflection from %v", peer)
+		return true
 	default:
 		log.Printf("got %+v; want echo reply", rm)
 	}
-	s = append(s, ip)
-	return s
+	return false
 }
 
-func PortScan(ip string, port int) {
+func IsAlive(ipRange IpRange) IsAliveResult {
+	wg := sync.WaitGroup{}
+	defer wg.Wait()
+	var result IsAliveResult
 
+	for _, ip := range ipRange.Iterate() {
+		wg.Add(1)
+		go func(ip net.IP) {
+			defer wg.Done()
+			ok := Ping(ip)
+
+			if ok {
+				log.Println("can ping")
+			} else {
+				log.Println("no ping")
+			}
+		}(ip)
+	}
+
+	return result
 }

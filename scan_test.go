@@ -129,7 +129,7 @@ func TestMultipleScan(t *testing.T) {
 	assert.Equal(t, 10, len(response))
 
 	for port, status := range response {
-		if port != 8000 {
+		if port != 7000 {
 			assert.Equal(t, status, PortClosed)
 		} else {
 			assert.Equal(t, status, PortOpen)

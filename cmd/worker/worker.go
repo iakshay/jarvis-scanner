@@ -21,10 +21,28 @@ type Worker struct {
 
 func (worker *Worker) DoTask() {
 	fmt.Println("Doing Task")
-
-	time.Sleep(1000 * time.Millisecond)
 	args := &common.CompleteTaskArgs{}
 	var reply common.CompleteTaskReply
+
+	switch param.Type {
+	case IsAliveTask:
+		t, ok := worker.param.Data.(IsAliveParam)
+		if !ok {
+			return log.Fatal("Invalid param data")
+		}
+
+		args.Result = &common.IsAliveResult{}
+	case PortScanTask:
+		t, ok := param.Data.(PortScanParam)
+		if !ok {
+			return log.Fatal("Invalid param data")
+		}
+		args.Result = &common.IsAliveResult{}
+	default:
+		return log.Fatal("Invalid task type")
+	}
+
+	time.Sleep(1000 * time.Millisecond)
 	worker.client.Call("Server.CompleteTask", args, &reply)
 }
 
