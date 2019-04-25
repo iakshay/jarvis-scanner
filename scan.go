@@ -248,7 +248,7 @@ func (s *scanner) send(l ...gopacket.SerializableLayer) error {
 	return s.handle.WritePacketData(s.buf.Bytes())
 }
 
-func ScanPort(ip string, portRange PortRange, timeout time.Duration) {
+func NormalPortScan(ip string, portRange PortRange, timeout time.Duration) {
 	wg := sync.WaitGroup{}
 	defer wg.Wait()
 

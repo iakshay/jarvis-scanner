@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/google/gopacket/routing"
 	common "github.com/iakshay/jarvis-scanner"
 	"log"
 	"net"
@@ -26,23 +27,36 @@ func (worker *Worker) DoTask() {
 
 	switch param.Type {
 	case IsAliveTask:
-		t, ok := worker.param.Data.(IsAliveParam)
+		isAliveParam, ok := worker.param.Data.(IsAliveParam)
 		if !ok {
 			return log.Fatal("Invalid param data")
 		}
 
-		args.Result = &common.IsAliveResult{}
+		args.Result = common.IsAlive(isAliveParam.IpRange)
 	case PortScanTask:
-		t, ok := param.Data.(PortScanParam)
+		portScanParam, ok := param.Data.(PortScanParam)
 		if !ok {
 			return log.Fatal("Invalid param data")
 		}
-		args.Result = &common.IsAliveResult{}
+		if portScanParam.mode == NormalScan {
+			args.Result = common.NormalPortScan(portScanParam.IP, portScanParam.PortRange, 3*time.Second)
+
+		} else {
+			router, err := routing.New()
+			if err != nil {
+				log.Fatal("routing error:", err)
+			}
+			s, err := newScanner(portScanParam.Ip, router)
+			if err != nil {
+				t.Fatalf("unable to create scanner for %v: %v", ip, err)
+			}
+			defer s.close()
+			args.Result, err = s.scan(portScanParam.mode, portScanParam.PortRange)
+		}
 	default:
 		return log.Fatal("Invalid task type")
 	}
 
-	time.Sleep(1000 * time.Millisecond)
 	worker.client.Call("Server.CompleteTask", args, &reply)
 }
 

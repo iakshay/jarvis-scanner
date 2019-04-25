@@ -138,5 +138,5 @@ func TestMultipleScan(t *testing.T) {
 }
 
 func TestNormalScan(t *testing.T) {
-	ScanPort("10.0.0.11", PortRange{7000, 7009}, 3*time.Second)
+	NormalPortScan("10.0.0.11", PortRange{7000, 7009}, 3*time.Second)
 }
