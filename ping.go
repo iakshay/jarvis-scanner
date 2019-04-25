@@ -72,7 +72,7 @@ func IsAlive(ipRange IpRange) IsAliveResult {
 	var isAliveResult IsAliveResult
 	for k, v := range result {
 		log.Println(k, v)
-		isAliveResult.Result = append(isAliveResult.Result, IpResult{net.ParseIP(k), v})
+		isAliveResult = append(isAliveResult, IpResult{net.ParseIP(k), v})
 	}
 	return isAliveResult
 }

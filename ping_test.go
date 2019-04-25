@@ -7,7 +7,7 @@ import (
 )
 
 func TestIsAlive(t *testing.T) {
-	result := IsAlive(IpRange{net.ParseIP("10.0.0.5"), net.ParseIP("10.0.0.10")}).Result
+	result := IsAlive(IpRange{net.ParseIP("10.0.0.5"), net.ParseIP("10.0.0.10")})
 	assert.Equal(t, len(result), 6)
 	vmIp1 := net.ParseIP("10.0.0.10")
 	vmIp2 := net.ParseIP("10.0.0.11")
@@ -19,19 +19,19 @@ func TestIsAlive(t *testing.T) {
 		}
 	}
 
-	result = IsAlive(IpRange{net.ParseIP("10.0.0.10"), net.ParseIP("10.0.0.11")}).Result
+	result = IsAlive(IpRange{net.ParseIP("10.0.0.10"), net.ParseIP("10.0.0.11")})
 	assert.Equal(t, len(result), 2)
 	for _, ipResult := range result {
 		assert.Equal(t, ipResult.Status, IpAlive)
 	}
 
-	result = IsAlive(IpRange{net.ParseIP("127.0.0.1"), net.ParseIP("127.0.0.20")}).Result
+	result = IsAlive(IpRange{net.ParseIP("127.0.0.1"), net.ParseIP("127.0.0.20")})
 	assert.Equal(t, len(result), 20)
 	for _, ipResult := range result {
 		assert.Equal(t, ipResult.Status, IpAlive)
 	}
 
-	result = IsAlive(IpRange{net.ParseIP("10.0.0.1"), net.ParseIP("10.0.0.255")}).Result
+	result = IsAlive(IpRange{net.ParseIP("10.0.0.1"), net.ParseIP("10.0.0.255")})
 	assert.Equal(t, len(result), 255)
 	for _, ipResult := range result {
 		if vmIp1.Equal(ipResult.Ip) || vmIp2.Equal(ipResult.Ip) {

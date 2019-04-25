@@ -115,9 +115,7 @@ type IsAliveParam struct {
 
 //
 // IsAlive result
-type IsAliveResult struct {
-	Result []IpResult
-}
+type IsAliveResult []IpResult
 
 //
 // PortScan param
@@ -129,9 +127,7 @@ type PortScanParam struct {
 
 //
 // PortScan result
-type PortScanResult struct {
-	Result []PortResult
-}
+type PortScanResult []PortResult
 
 //
 // generic task param
