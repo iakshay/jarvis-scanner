@@ -34,11 +34,11 @@ func TestSynScan(t *testing.T) {
 
 	assert.Equal(t, 20, len(response))
 
-	for port, status := range response {
+	for port, result := range response {
 		if port != 8000 {
-			assert.Equal(t, status, PortClosed)
+			assert.Equal(t, result.Status, PortClosed)
 		} else {
-			assert.Equal(t, status, PortOpen)
+			assert.Equal(t, result.Status, PortOpen)
 		}
 	}
 }
@@ -66,11 +66,11 @@ func TestFinScan(t *testing.T) {
 	assert.Equal(t, err, nil)
 	assert.Equal(t, 20, len(response))
 
-	for port, status := range response {
+	for port, result := range response {
 		if port != 8000 {
-			assert.Equal(t, status, PortClosed)
+			assert.Equal(t, result.Status, PortClosed)
 		} else {
-			assert.Equal(t, status, PortOpen|PortFiltered)
+			assert.Equal(t, result.Status, PortOpen|PortFiltered)
 		}
 	}
 }
@@ -99,11 +99,11 @@ func TestMultipleScan(t *testing.T) {
 
 	assert.Equal(t, 20, len(response))
 
-	for port, status := range response {
+	for port, result := range response {
 		if port != 8000 {
-			assert.Equal(t, status, PortClosed)
+			assert.Equal(t, result.Status, PortClosed)
 		} else {
-			assert.Equal(t, status, PortOpen)
+			assert.Equal(t, result.Status, PortOpen)
 		}
 	}
 	s.close()
@@ -113,11 +113,11 @@ func TestMultipleScan(t *testing.T) {
 	assert.Equal(t, err, nil)
 	s.close()
 
-	for port, status := range response {
+	for port, result := range response {
 		if port != 8000 {
-			assert.Equal(t, status, PortClosed)
+			assert.Equal(t, result.Status, PortClosed)
 		} else {
-			assert.Equal(t, status, PortOpen|PortFiltered)
+			assert.Equal(t, result.Status, PortOpen|PortFiltered)
 		}
 	}
 
@@ -128,15 +128,23 @@ func TestMultipleScan(t *testing.T) {
 
 	assert.Equal(t, 10, len(response))
 
-	for port, status := range response {
+	for port, result := range response {
 		if port != 7000 {
-			assert.Equal(t, status, PortClosed)
+			assert.Equal(t, result.Status, PortClosed)
 		} else {
-			assert.Equal(t, status, PortOpen)
+			assert.Equal(t, result.Status, PortOpen)
 		}
 	}
 }
 
 func TestNormalScan(t *testing.T) {
-	NormalPortScan("10.0.0.11", PortRange{7000, 7009}, 3*time.Second)
+	result := NormalPortScan("10.0.0.11", PortRange{7000, 7009}, 3*time.Second)
+	assert.Equal(t, len(result), 10)
+	for port, result := range result {
+		if port != 7000 {
+			assert.Equal(t, result.Status, PortClosed)
+		} else {
+			assert.Equal(t, result.Status, PortOpen)
+		}
+	}
 }

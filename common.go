@@ -102,7 +102,6 @@ type PortRange struct {
 }
 
 type PortResult struct {
-	Port   uint16
 	Status PortStatus
 	Banner string
 }
@@ -127,7 +126,7 @@ type PortScanParam struct {
 
 //
 // PortScan result
-type PortScanResult []PortResult
+type PortScanResult map[uint16]PortResult
 
 //
 // generic task param

@@ -143,17 +143,17 @@ func (s *scanner) getHwAddr() (net.HardwareAddr, error) {
 }
 
 // scan scans the dst IP address of this scanner.
-func (s *scanner) scan(scanType PortScanType, portRange PortRange) (map[uint16]PortStatus, error) {
+func (s *scanner) scan(scanType PortScanType, portRange PortRange) (PortScanResult, error) {
 	// First off, get the MAC address we should be sending packets to.
 	log.Print("get hw addr")
 	hwaddr, err := s.getHwAddr()
 	if err != nil {
 		return nil, err
 	}
-	result := make(map[uint16]PortStatus)
+	result := make(PortScanResult)
 	for i := portRange.Start; i <= portRange.End; i++ {
 		// keeping the default status as filtered
-		result[i] = PortFiltered
+		result[i] = PortResult{PortFiltered, ""}
 	}
 	// Construct all the network layers we need.
 	eth := layers.Ethernet{
@@ -216,20 +216,21 @@ func (s *scanner) scan(scanType PortScanType, portRange PortRange) (map[uint16]P
 				// log.Printf("dst port %v does not match", tcp.DstPort)
 			} else if tcp.RST {
 				log.Printf("  port %v closed", tcp.SrcPort)
-				result[uint16(tcp.SrcPort)] = PortClosed
+				result[uint16(tcp.SrcPort)] = PortResult{PortClosed, ""}
 			} else if scanType == SynScan && tcp.SYN && tcp.ACK {
 				log.Printf("  port %v open", tcp.SrcPort)
-				result[uint16(tcp.SrcPort)] = PortOpen
+				result[uint16(tcp.SrcPort)] = PortResult{PortOpen, ""}
 			} else {
 				// log.Printf("ignoring useless packet")
 			}
+
 		case <-ticker:
 			// call timed out
 			log.Println("timeout")
 			if scanType == FinScan {
-				for idx := range result {
-					if result[idx] == PortFiltered {
-						result[idx] |= PortOpen
+				for port, _ := range result {
+					if result[port].Status == PortFiltered {
+						result[port] = PortResult{PortOpen | PortFiltered, ""}
 					}
 				}
 			}
@@ -248,23 +249,30 @@ func (s *scanner) send(l ...gopacket.SerializableLayer) error {
 	return s.handle.WritePacketData(s.buf.Bytes())
 }
 
-func NormalPortScan(ip string, portRange PortRange, timeout time.Duration) {
+func NormalPortScan(ip string, portRange PortRange, timeout time.Duration) PortScanResult {
 	wg := sync.WaitGroup{}
+	var mu sync.Mutex
 	defer wg.Wait()
+	result := make(PortScanResult)
 
 	for port := portRange.Start; port <= portRange.End; port++ {
 		wg.Add(1)
 		go func(ip string, port uint16) {
 			defer wg.Done()
+			var status PortStatus
 			addr := fmt.Sprintf("%s:%d", ip, port)
 			_, err := net.DialTimeout("tcp", addr, timeout)
 
 			if err != nil {
-				log.Println("timeout or closed")
+				status = PortClosed
 			} else {
-				log.Println("open")
+				status = PortOpen
 			}
+			mu.Lock()
+			result[port] = PortResult{status, ""}
+			mu.Unlock()
 		}(ip, port)
 	}
 
+	return result
 }
