@@ -3,6 +3,7 @@ package common
 import "errors"
 import "strings"
 import "net"
+import "log"
 
 type TaskState int
 type TaskType int
@@ -70,7 +71,7 @@ const (
 )
 
 const (
-	IsAliveJob JobType = 0
+	IsAliveJob  JobType = 0
 	PortScanJob JobType = 1
 )
 
@@ -85,6 +86,29 @@ type IpRange struct {
 	End   net.IP
 }
 
+func (ipRange *IpRange) Iterate() []net.IP {
+	var ips []net.IP
+
+	if ip := ipRange.Start.To4(); ip == nil {
+		log.Fatal("expected IPv4")
+	}
+
+	start := ipRange.Start.To4()
+	end := ipRange.End.To4()
+	//log.Println("%d %d %d %d", start[0], start[1], start[2], start[3])
+	for p1 := int(start[0]); p1 <= int(end[0]); p1++ {
+		for p2 := int(start[1]); p2 <= int(end[1]); p2++ {
+			for p3 := int(start[2]); p3 <= int(end[2]); p3++ {
+				for p4 := int(start[3]); p4 <= int(end[3]); p4++ {
+					ips = append(ips, net.IPv4(byte(p1), byte(p2), byte(p3), byte(p4)))
+				}
+			}
+		}
+	}
+
+	return ips
+}
+
 type IpResult struct {
 	Ip     net.IP
 	Status IpStatus
@@ -96,7 +120,6 @@ type PortRange struct {
 }
 
 type PortResult struct {
-	Port   uint16
 	Status PortStatus
 	Banner string
 }
@@ -109,9 +132,7 @@ type IsAliveParam struct {
 
 //
 // IsAlive result
-type IsAliveResult struct {
-	Result []IpResult
-}
+type IsAliveResult []IpResult
 
 //
 // PortScan param
@@ -123,9 +144,7 @@ type PortScanParam struct {
 
 //
 // PortScan result
-type PortScanResult struct {
-	Result []PortResult
-}
+type PortScanResult map[uint16]PortResult
 
 //
 // generic task param
