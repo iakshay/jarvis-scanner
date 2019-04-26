@@ -4,13 +4,31 @@ import "errors"
 import "strings"
 import "net"
 
+type TaskState int
 type TaskType int
+type WorkerState int
 type JobType int
 type PortScanType int
 type PortStatus int
 type IpStatus int
 type TaskData interface{}
 type JobSubmitData interface{}
+
+const (
+	LifeCycle	int = 1
+)
+
+const (
+        Queued     TaskState = 0
+        InProgress TaskState = 1
+        Complete   TaskState = 2
+)
+
+const (
+	Undetermined	WorkerState = 0
+	Unavailable	WorkerState = -1
+	Available	WorkerState = 1
+)
 
 const (
 	IpAlive IpStatus = 0

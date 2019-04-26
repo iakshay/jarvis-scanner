@@ -21,14 +21,6 @@ import (
 	"time"
 )
 
-type TaskState int
-
-const (
-	Queued     TaskState = 0
-	InProgress TaskState = 1
-	Complete   TaskState = 2
-)
-
 type Task struct {
 	Id          int
 	JobId       int
@@ -114,6 +106,68 @@ func (server *Server) startTask() {
 		client.Call("Worker.SendTask", args, reply)
 		break
 	}
+}
+
+func (server *Server) Schedule() {
+	db := server.db
+	connections := server.connections
+
+	for {
+		workerAvails := make(map[int]common.WorkerState)
+		var workers []Worker
+		db.Find(&workers)
+		numWorkers := 0
+		for worker := range workers {
+			workerAvails[worker.Id] = common.Undetermined
+			numWorkers += 1
+		}
+		freeWorkers := make([Worker], numWorkers)
+		freeWorkerIndex := 0
+
+		queuedTasks, inProgressTasks, completeTasks := make([Task], 0, numWorkers), make([Task], 0, numWorkers), make([Task], 0, numWorkers)
+		queuedCount, inProgressCount, completeCount := 0, 0, 0
+		var tasks []Task
+		db.Find(&tasks)
+		for task := range tasks {
+			if task.State == common.Queued {
+				queuedTasks[queuedCount] = task
+				queuedCount += 1
+			} else if task.State == common.InProgress {
+				inProgressTasks[inProgressCount] = task
+				inProgressCount += 1
+			} else {
+				completeTasks[completeCount] = task
+				completeCount += 1
+			}
+		}
+
+		for task := range completeTasks {
+			workerAvails[task.Worker.Id] = common.Available
+			freeWorkers[freeWorkerIndex] = task.Worker
+			freeWorkerIndex += 1
+		}
+
+		for task := range inProgressTasks {
+			workerAvails[task.Worker.Id] = common.Unavailable
+		}
+
+		for worker := range workerAvails {
+			if workerAvails[worker] == common.Undetermined {
+				freeWorkers[freeWorkerIndex]] = worker
+				freeWorkerIndex += 1
+			}
+		}
+
+		index := 0
+		for (index < numWorkers) && (queuedTasks[index] != nil) && (freeWorkers[index] != nil) {
+			if (time.Now().Sub(freeWorkers[index].UpdatedAt)) > common.LifeCycle {
+				db.Delete(&(freeWorkers[index]))
+			} else
+		}
+
+		time.Sleep(1.5 * time.Second)
+	}
+
 }
 
 // https://gist.github.com/reagent/043da4661d2984e9ecb1ccb5343bf438
@@ -242,7 +296,7 @@ func (s *Server) handleJobs(ctx *Context) {
 					log.Fatal(err)
 				}
 
-				var jobParams JobSubmitParam
+				var jobParams common.JobSubmitParam
 				err = json.Unmarshal(b, &jobParams)
 				if err != nil {
 					log.Fatal(err)
@@ -252,7 +306,7 @@ func (s *Server) handleJobs(ctx *Context) {
 				var workerCount int
 				db.Table("workers").Count(&workerCount)
 				tasks := make([]Task, workerCount)
-				if typVal == IsAliveJob {
+				if typVal == common.IsAliveJob {
 					IPSplit := strings.Split(jobParams.IpBlock, "/")
 					// IP struct stores most recent 32-bit IP address in final four bytes of array
 					IPBlock := net.ParseIP(IPSplit[0])[12:16]
@@ -276,7 +330,7 @@ func (s *Server) handleJobs(ctx *Context) {
 							log.Fatal(e)
 						}
 
-						task := Task{Queued, buf}
+						task := Task{common.Queued, buf}
 						db.Create(&task)
 						tasks[i] = task
 						IP32Rep = nextIP32Base
@@ -294,13 +348,14 @@ func (s *Server) handleJobs(ctx *Context) {
 					currStart := Start
 					var currEnd uint16
 					for i := 0; i < workerCount; i++ {
-						currEnd = currStart + quotientWork 
+						currEnd = currStart + quotientWork
 						if remainderWork > 0 {
 							currEnd += 1
 							remainderWork = remainderWork - 1
 						}
-						taskRange := PortRange{currStart, currEnd}
-						taskParamData := PortScanParam{Type, IP, taskRange}						
+						taskRange := common.PortRange{currStart, currEnd}
+						taskParamData := common.PortScanParam{Type, IP, taskRange}
+
 						buf, e := json.Marshal(taskParamData)
 						if e != nil {
 							log.Fatal(e)
@@ -352,7 +407,7 @@ func main() {
 	db.AutoMigrate(&Task{})
 	db.AutoMigrate(&Worker{})
 
-	/*	for i:= 0; i < 2; i++ {
+/*		for i:= 0; i < 2; i++ {
 				var tasks []Task
 				for j:= 0; j < 3; j++ {
 					worker := new(Worker)
@@ -398,9 +453,12 @@ func main() {
 	wg.Add(1)
 	go http.Serve(l, nil)
 
+	// start thread for Scheduler aspect of Server
+	go server.Schedule()
+
 	time.Sleep(3 * time.Second)
 	// start dummy task on one worker
-	server.startTask()
+//	server.startTask()
 	wg.Wait()
 }
 
