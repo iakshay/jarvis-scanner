@@ -4,6 +4,7 @@ import "errors"
 import "strings"
 import "net"
 import "log"
+import "time"
 import "encoding/json"
 
 type TaskState int
@@ -17,7 +18,7 @@ type TaskData interface{}
 type JobSubmitData interface{}
 
 const (
-	LifeCycle	int = 1
+	LifeCycle	time.Duration = time.Second
 )
 
 const (
