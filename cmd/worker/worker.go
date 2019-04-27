@@ -15,9 +15,9 @@ import (
 
 type Worker struct {
 	Id     int
-	taskId int
-	param  common.TaskParam
-	client *rpc.Client
+	Client *rpc.Client
+
+	common.SendTaskArgs
 }
 
 func (worker *Worker) DoTask() {
@@ -25,48 +25,48 @@ func (worker *Worker) DoTask() {
 	args := &common.CompleteTaskArgs{}
 	var reply common.CompleteTaskReply
 
-	switch param.Type {
-	case IsAliveTask:
-		isAliveParam, ok := worker.param.Data.(IsAliveParam)
+	switch worker.TaskType {
+	case common.IsAliveTask:
+		isAliveParam, ok := worker.TaskData.(common.IsAliveParam)
 		if !ok {
-			return log.Fatal("Invalid param data")
+			log.Fatal("Invalid param data")
 		}
 
 		args.Result = common.IsAlive(isAliveParam.IpRange)
-	case PortScanTask:
-		portScanParam, ok := param.Data.(PortScanParam)
+	case common.PortScanTask:
+		portScanParam, ok := worker.TaskData.(common.PortScanParam)
 		if !ok {
-			return log.Fatal("Invalid param data")
+			log.Fatal("Invalid param data")
 		}
-		if portScanParam.mode == NormalScan {
-			args.Result = common.NormalPortScan(portScanParam.IP, portScanParam.PortRange, 3*time.Second)
+		if portScanParam.Type == common.NormalScan {
+			args.Result = common.NormalPortScan(portScanParam.Ip, portScanParam.PortRange, 3*time.Second)
 
 		} else {
 			router, err := routing.New()
 			if err != nil {
 				log.Fatal("routing error:", err)
 			}
-			s, err := newScanner(portScanParam.Ip, router)
+			s, err := common.NewScanner(portScanParam.Ip, router)
 			if err != nil {
-				t.Fatalf("unable to create scanner for %v: %v", ip, err)
+				log.Fatal("failed to create scanner:", err)
 			}
-			defer s.close()
-			args.Result, err = s.scan(portScanParam.mode, portScanParam.PortRange)
+			defer s.Close()
+			args.Result, err = s.Scan(portScanParam.Type, portScanParam.PortRange)
 		}
 	default:
-		return log.Fatal("Invalid task type")
+		log.Fatal("Invalid task type")
 	}
 
-	worker.client.Call("Server.CompleteTask", args, &reply)
+	worker.Client.Call("Server.CompleteTask", args, &reply)
 }
 
 func (worker *Worker) SendTask(args *common.SendTaskArgs, reply *common.SendTaskReply) error {
-	if worker.taskId != -1 {
+	if worker.TaskId != -1 {
 		log.Fatal("already process task!")
 	}
 
-	worker.param = args.Param
-	worker.taskId = args.TaskId
+	worker.TaskData = args.TaskData
+	worker.TaskId = args.TaskId
 	go worker.DoTask()
 
 	return nil
@@ -77,7 +77,7 @@ func (worker *Worker) RunHearbeat() {
 	var reply common.HeartbeatReply
 	for {
 		fmt.Println("Sending hearbeat")
-		worker.client.Call("Server.Heartbeat", args, &reply)
+		worker.Client.Call("Server.Heartbeat", args, &reply)
 		time.Sleep(500 * time.Millisecond)
 	}
 }
@@ -90,14 +90,17 @@ func main() {
 	flag.Parse()
 	var wg sync.WaitGroup
 	wg.Add(1)
-	client, err := rpc.DialHTTP("tcp", serverAddr)
-	if err != nil {
-		log.Fatal("dialing:", err)
-	}
 
+	// keep trying to connect to the server
+	client, err := rpc.DialHTTP("tcp", serverAddr)
+	for err != nil {
+		log.Println("dialing:", err)
+		time.Sleep(5 * time.Second)
+		client, err = rpc.DialHTTP("tcp", serverAddr)
+	}
 	worker := new(Worker)
-	worker.client = client
-	worker.taskId = -1
+	worker.Client = client
+	worker.TaskId = -1
 
 	// open upto requests from server
 	fmt.Println("Starting worker")

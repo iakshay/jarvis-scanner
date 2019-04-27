@@ -48,7 +48,7 @@ type scanner struct {
 
 // newScanner creates a new scanner for a given destination IP address, using
 // router to determine how to route packets to that IP.
-func newScanner(ip net.IP, router routing.Router) (*scanner, error) {
+func NewScanner(ip net.IP, router routing.Router) (*scanner, error) {
 	s := &scanner{
 		dst: ip,
 		opts: gopacket.SerializeOptions{
@@ -83,7 +83,7 @@ func newScanner(ip net.IP, router routing.Router) (*scanner, error) {
 }
 
 // close cleans up the handle.
-func (s *scanner) close() {
+func (s *scanner) Close() {
 	s.handle.Close()
 }
 
@@ -143,7 +143,7 @@ func (s *scanner) getHwAddr() (net.HardwareAddr, error) {
 }
 
 // scan scans the dst IP address of this scanner.
-func (s *scanner) scan(scanType PortScanType, portRange PortRange) (PortScanResult, error) {
+func (s *scanner) Scan(scanType PortScanType, portRange PortRange) (PortScanResult, error) {
 	// First off, get the MAC address we should be sending packets to.
 	log.Print("get hw addr")
 	hwaddr, err := s.getHwAddr()
@@ -249,7 +249,7 @@ func (s *scanner) send(l ...gopacket.SerializableLayer) error {
 	return s.handle.WritePacketData(s.buf.Bytes())
 }
 
-func NormalPortScan(ip string, portRange PortRange, timeout time.Duration) PortScanResult {
+func NormalPortScan(ip net.IP, portRange PortRange, timeout time.Duration) PortScanResult {
 	wg := sync.WaitGroup{}
 	var mu sync.Mutex
 	defer wg.Wait()
@@ -257,10 +257,10 @@ func NormalPortScan(ip string, portRange PortRange, timeout time.Duration) PortS
 
 	for port := portRange.Start; port <= portRange.End; port++ {
 		wg.Add(1)
-		go func(ip string, port uint16) {
+		go func(port uint16) {
 			defer wg.Done()
 			var status PortStatus
-			addr := fmt.Sprintf("%s:%d", ip, port)
+			addr := fmt.Sprintf("%s:%d", ip.String(), port)
 			_, err := net.DialTimeout("tcp", addr, timeout)
 
 			if err != nil {
@@ -271,7 +271,7 @@ func NormalPortScan(ip string, portRange PortRange, timeout time.Duration) PortS
 			mu.Lock()
 			result[port] = PortResult{status, ""}
 			mu.Unlock()
-		}(ip, port)
+		}(port)
 	}
 
 	return result

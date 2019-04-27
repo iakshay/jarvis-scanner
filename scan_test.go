@@ -21,15 +21,15 @@ func TestSynScan(t *testing.T) {
 	if ip == nil {
 		return
 	}
-	// Note:  newScanner creates and closes a pcap Handle once for
+	// Note:  NewScanner creates and closes a pcap Handle once for
 	// every scan target.  We could do much better, were this not an
 	// example ;)
-	s, err := newScanner(ip, router)
+	s, err := NewScanner(ip, router)
 	if err != nil {
 		t.Fatalf("unable to create scanner for %v: %v", ip, err)
 	}
-	defer s.close()
-	response, err := s.scan(SynScan, PortRange{7990, 8009})
+	defer s.Close()
+	response, err := s.Scan(SynScan, PortRange{7990, 8009})
 	assert.Equal(t, err, nil)
 
 	assert.Equal(t, 20, len(response))
@@ -55,14 +55,14 @@ func TestFinScan(t *testing.T) {
 	if ip == nil {
 		return
 	}
-	// Note:  newScanner creates and closes a pcap Handle once for
+	// Note:  NewScanner creates and closes a pcap Handle once for
 	// every scan target.  We could do much better, were this not an
 	// example ;)
-	s, err := newScanner(ip, router)
+	s, err := NewScanner(ip, router)
 	if err != nil {
 		t.Fatalf("unable to create scanner for %v: %v", ip, err)
 	}
-	response, err := s.scan(FinScan, PortRange{7990, 8009})
+	response, err := s.Scan(FinScan, PortRange{7990, 8009})
 	assert.Equal(t, err, nil)
 	assert.Equal(t, 20, len(response))
 
@@ -87,14 +87,14 @@ func TestMultipleScan(t *testing.T) {
 	if ip == nil {
 		return
 	}
-	// Note:  newScanner creates and closes a pcap Handle once for
+	// Note:  NewScanner creates and closes a pcap Handle once for
 	// every scan target.  We could do much better, were this not an
 	// example ;)
-	s, err := newScanner(ip, router)
+	s, err := NewScanner(ip, router)
 	if err != nil {
 		t.Fatalf("unable to create scanner for %v: %v", ip, err)
 	}
-	response, err := s.scan(SynScan, PortRange{7990, 8009})
+	response, err := s.Scan(SynScan, PortRange{7990, 8009})
 	assert.Equal(t, err, nil)
 
 	assert.Equal(t, 20, len(response))
@@ -106,12 +106,12 @@ func TestMultipleScan(t *testing.T) {
 			assert.Equal(t, result.Status, PortOpen)
 		}
 	}
-	s.close()
+	s.Close()
 
-	s, err = newScanner(ip, router)
-	response, err = s.scan(FinScan, PortRange{7990, 8009})
+	s, err = NewScanner(ip, router)
+	response, err = s.Scan(FinScan, PortRange{7990, 8009})
 	assert.Equal(t, err, nil)
-	s.close()
+	s.Close()
 
 	for port, result := range response {
 		if port != 8000 {
@@ -121,10 +121,10 @@ func TestMultipleScan(t *testing.T) {
 		}
 	}
 
-	s, err = newScanner(ip, router)
-	response, err = s.scan(SynScan, PortRange{7000, 7009})
+	s, err = NewScanner(ip, router)
+	response, err = s.Scan(SynScan, PortRange{7000, 7009})
 	assert.Equal(t, err, nil)
-	s.close()
+	s.Close()
 
 	assert.Equal(t, 10, len(response))
 
