@@ -4,6 +4,7 @@ import "errors"
 import "strings"
 import "net"
 import "log"
+import "encoding/json"
 
 type TaskState int
 type TaskType int
@@ -154,21 +155,22 @@ type TaskParam struct {
 }
 
 type JobIsAliveParam struct {
-	IpBlock string
+	IpBlock string `json:"IpBlock"`
 }
 
 type JobPortScanParam struct {
-	Ip    net.IP
-	Type  PortScanType
-	Range PortRange
+	Ip    net.IP `json:"Ip,omitempty"`
+	Type  PortScanType `json:"ScanType,omitempty"`
+	StartPort uint16 `json:"Start,omitempty"`
+	EndPort uint16 `json:"End,omitempty"`
 }
 
 //
 // generic job param
 type JobSubmitParam struct {
-	Type JobType
+	Type JobType `json:"Type,omitempty"`
 	// should be JobIsAliveParam or JobPortScanParam
-	Data JobSubmitData
+	Data json.RawMessage
 }
 
 type JobSubmitReply struct{}

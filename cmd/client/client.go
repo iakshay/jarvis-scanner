@@ -10,6 +10,7 @@ import (
 	"log"
 	"bytes"
 	"encoding/json"
+	"net"
 )
 
 func Usage() {
@@ -21,7 +22,7 @@ func Usage() {
 		"\t./client -task=delete id=4\n\n"+
 		"For task=submit; general format of execution is:\n"+
 		"\t./client -task=submit -type=isAlive -ip=1.2.3.4/255\n"+
-		"\t./client -task=submit -type=portScan -ip=1.2.3.4 -mode=SYN -range=100-200\n\n")
+		"\t./client -task=submit -type=portScan -ip=1.2.3.4 -mode=Syn -start=100 -end=200\n\n")
 
 	fmt.Printf("Possible values for the flags are:\n")
 	flag.PrintDefaults()
@@ -34,7 +35,8 @@ func main() {
 	var jobType string
 	var IP string
 	var scanMode string
-	var portRange string
+	var rangeStart string
+	var rangeEnd string
 
 
 	flag.StringVar(&taskName, "task", "", "Enter the type of task: {list, view, delete or submit}")
@@ -42,14 +44,17 @@ func main() {
 	flag.StringVar(&jobType, "type", "", "Enter the type of the job: {isAlive or portScan}")
 	flag.StringVar(&IP, "ip", "", "Enter the ip address or range of ip address : {1.2.3.4/255}")
 	flag.StringVar(&scanMode, "mode", "", "Enter the mode of the scanning : {Normal,SYN or FIN}")
-	flag.StringVar(&portRange, "range", "", "Enter the range of port for scanning : {100-200}")
+	flag.StringVar(&rangeStart, "start", "", "Enter the start port of range of port for scanning")
+	flag.StringVar(&rangeEnd, "end", "", "Enter the end port of range of port for scanning")
+
+
 
 	flag.Parse()
 
 	if taskName == "list" {
 		fmt.Println("Task name is: ",taskName)
 		//creating get request for list
-		resp, err := http.Get("http://localhost:8080/job/?task="+string(taskName))
+		resp, err := http.Get("http://localhost:8080/jobs/?task="+string(taskName))
 	        if err != nil {
 		        log.Fatalln(err)
 	        }
@@ -62,9 +67,9 @@ func main() {
 		log.Println("\nReturned value from server:\n",string(body))
 
 	} else if (taskName == "view" || taskName == "delete") && jobId > 0{
-		fmt.Printf("value of task: %s and id: %s\n",taskName, jobId)
+		fmt.Printf("value of task: %s and id: %d\n",taskName, jobId)
 		//creating get request for view and delete specific job ID
-		resp, err := http.Get("http://localhost:8080/job/?task="+taskName+"&id="+strconv.Itoa(jobId))
+		resp, err := http.Get("http://localhost:8080/jobs/?task="+taskName+"&id="+strconv.Itoa(jobId))
 		if err != nil {
                         log.Fatalln(err)
                 }
@@ -79,15 +84,25 @@ func main() {
 			fmt.Printf("value of task:%s, jobtype:%s, ip:%s\n",taskName, jobType, IP)
 			//creating json form
 			message := map[string]interface{}{
-		                "type": jobType,
-			        "ip": IP,
+		                "Type" : 0,
+			        "Data" :map[string]interface{} {"IpBlock" : IP},
 			}
+/*			var jsonStr = `{
+				"Type": 0,
+				"Data": {"IpBlock": IP}
+			}
+			`
+			jsonMap := make(map[string]interface{})
+			err := json.Unmarshal([]byte(jsonStr), &jsonMap)
+			if err != nil {
+				panic(err)
+			}*/
 			bytesRepresentation, err := json.Marshal(message)
 			if err != nil {
 				log.Fatalln(err)
 			}
 			//creating post request for isAlive
-			resp, err := http.Post("http://localhost:8080/job/", "application/json", bytes.NewBuffer(bytesRepresentation))
+			resp, err := http.Post("http://localhost:8080/jobs/", "application/json", bytes.NewBuffer(bytesRepresentation))
 			if err != nil {
 				log.Fatalln(err)
 			}
@@ -95,20 +110,39 @@ func main() {
 			body, _ := ioutil.ReadAll(resp.Body)
 			log.Println("\nReturned value from server: ",string(body))
 
-		} else if jobType == "portScan" && IP != "" && scanMode != "" && portRange != ""{
-			fmt.Printf("value of task:%s, jobtype:%s, ip:%s, scanMode:%s, portRange:%s\n",taskName, jobType, IP, scanMode, portRange)
+		} else if jobType == "portScan" && IP != "" && scanMode != "" && rangeStart != "" && rangeEnd != ""{
+			fmt.Printf("value of task:%s, jobtype:%s, ip:%s, scanMode:%s, rangeStart:%s, rangeEnd%s\n",taskName, jobType, IP, scanMode, rangeStart, rangeEnd)
+			//Converting variables for sending
+			var IpAddress net.IP
+			IpAddress = net.ParseIP(IP)
+			var ScanType int
+			if scanMode == "Normal"{
+				ScanType = 0
+			} else if scanMode == "Syn" {
+				ScanType = 1
+			} else if scanMode == "Fin" {
+				ScanType = 2
+			} else {
+				 os.Exit(0)
+			}
+			ValStart, err := strconv.Atoi(rangeStart)
+			if err != nil {
+                                log.Fatalln(err)
+                        }
+			ValEnd, err := strconv.Atoi(rangeEnd)
+			if err != nil {
+                                log.Fatalln(err)
+                        }
 			//creating post request for portScan
 			message := map[string]interface{}{
-                                "type": jobType,
-                                "ip": IP,
-				"mode": scanMode,
-				"range":portRange,
-                        }
+                                "Type": 1,
+				"Data": map[string]interface{}{ "Ip":IpAddress, "ScanType": ScanType, "Start" : ValStart, "End": ValEnd},
+			}
                         bytesRepresentation, err := json.Marshal(message)
                         if err != nil {
                                 log.Fatalln(err)
                         }
-                        resp, err := http.Post("http://localhost:8080/job/", "application/json", bytes.NewBuffer(bytesRepresentation))
+			resp, err := http.Post("http://localhost:8080/jobs/", "application/json", bytes.NewBuffer(bytesRepresentation))
                         if err != nil {
                                 log.Fatalln(err)
                         }
