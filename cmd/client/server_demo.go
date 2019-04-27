@@ -257,55 +257,16 @@ func (s *Server) handleJobs(ctx *Context) {
 	switch r.Method {
 	//TODO: Just return each job's ID, params; for specific job's details, use its ID returned form this function
 	case "GET":
-		//Parsing get request
-                tasks, ok := r.URL.Query()["task"]
-
-                if !ok || len(tasks[0]) < 1 {
-                log.Println("Task is missing")
-                return
-                }
-
-                task := tasks[0]
-
-		if task == "list" {
-			rows, err := db.Table("jobs").Rows()
-			if err != nil {
-				log.Fatal(err)
-			}
-			for rows.Next() {
-				var job Job
-				rows.Scan(&job.Id, &job.Params)
-				io.WriteString(w,"JobId: " + strconv.Itoa(job.Id) +" param:"+string(job.Params)+"\n")
-			}
-			return
-		} else if task == "view" {
-			id, ok := r.URL.Query()["id"]
-			if !ok || len(id[0]) < 1 {
-				log.Println("Id is missing")
-				return
-			}
-			idval := id[0]
-			rows, err := db.Table("jobs").Where("Id = ?", idval).Rows()
-			if err != nil {
-				log.Fatal(err)
-			}
-			for rows.Next() {
-				var jobs Job
-				rows.Scan(&jobs.Id, &jobs.Params)
-				io.WriteString(w,"JobId: " + strconv.Itoa(jobs.Id) +" param:"+string(jobs.Params)+"\n")
-			}
-			fmt.Printf("Task is: %s , Id: is %s\n",task,idval)
-			return
-		}  else if task == "delete" {
-			id, ok := r.URL.Query()["id"]
-			if !ok || len(id[0]) < 1 {
-				log.Println("Id is missing")
-				return
-			}
-			idval := id[0]
-			fmt.Printf("Task is: %s , Id: is %s\n",task,idval)
-			return
+		rows, err := db.Table("jobs").Rows()
+		if err != nil {
+			log.Fatal(err)
 		}
+		for rows.Next() {
+			var job Job
+			rows.Scan(&job.Id, &job.Params)
+			io.WriteString(w,"JobId: " + strconv.Itoa(job.Id) +" param:"+string(job.Params)+"\n")
+		}
+		return
 	case "POST":
 		b, err := ioutil.ReadAll(r.Body)
 				if err != nil {
@@ -411,6 +372,37 @@ func (s *Server) handleJobs(ctx *Context) {
 
 }
 
+func (s *Server) handleJobID(ctx *Context) {
+	r := ctx.Request
+	param := ctx.Params
+	w := ctx.Response
+	db := s.db
+
+	var id int
+	id, err := strconv.Atoi(param[0])
+	if err != nil {
+		log.Fatalln(err)
+	}
+	fmt.Printf("id is %d\n",id)
+
+	switch r.Method {
+	case "GET":
+		rows, err := db.Table("jobs").Where("Id = ?", id).Rows()
+		if err != nil {
+			log.Fatal(err)
+		}
+		for rows.Next() {
+			var jobs Job
+			rows.Scan(&jobs.Id, &jobs.Params)
+			io.WriteString(w,"JobId: " + strconv.Itoa(jobs.Id) +" param:"+string(jobs.Params)+"\n")
+		}
+		return
+	case "DELETE":
+		fmt.Println("Delete\n");
+		return
+	}
+}
+
 func main() {
 	var serverAddr string
 	var dbPath string
@@ -451,6 +443,11 @@ func main() {
 	job := Job{Id:3,Params: bytesRepresentation}
 	db.Create(&job)
 */
+
+	server.Handle("/jobs/([0-9]+)$", func(ctx *Context) {
+		server.handleJobID(ctx)
+	})
+
 	server.Handle("/jobs/", func(ctx *Context) {
 		server.handleJobs(ctx)
 	})

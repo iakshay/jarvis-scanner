@@ -17,9 +17,9 @@ func Usage() {
 	fmt.Printf("Usage: \nFor task=list; general format of execution is:\n"+
 		"\t./client -task=list\n\n"+
 		"For task=view; general format of execution is:\n"+
-		"\t./client -task=view id=5\n\n"+
+		"\t./client -task=view -id=5\n\n"+
 		"For task=delete; general format of execution is:\n"+
-		"\t./client -task=delete id=4\n\n"+
+		"\t./client -task=delete -id=4\n\n"+
 		"For task=submit; general format of execution is:\n"+
 		"\t./client -task=submit -type=isAlive -ip=1.2.3.4/255\n"+
 		"\t./client -task=submit -type=portScan -ip=1.2.3.4 -mode=Syn -start=100 -end=200\n\n")
@@ -54,7 +54,7 @@ func main() {
 	if taskName == "list" {
 		fmt.Println("Task name is: ",taskName)
 		//creating get request for list
-		resp, err := http.Get("http://localhost:8080/jobs/?task="+string(taskName))
+		resp, err := http.Get("http://localhost:8080/jobs/")
 	        if err != nil {
 		        log.Fatalln(err)
 	        }
@@ -66,19 +66,42 @@ func main() {
 	        }
 		log.Println("\nReturned value from server:\n",string(body))
 
-	} else if (taskName == "view" || taskName == "delete") && jobId > 0{
+	} else if taskName == "view" && jobId > 0 {
 		fmt.Printf("value of task: %s and id: %d\n",taskName, jobId)
-		//creating get request for view and delete specific job ID
-		resp, err := http.Get("http://localhost:8080/jobs/?task="+taskName+"&id="+strconv.Itoa(jobId))
+		resp, err := http.Get("http://localhost:8080/jobs/"+strconv.Itoa(jobId))
 		if err != nil {
                         log.Fatalln(err)
                 }
-                defer resp.Body.Close()
+		defer resp.Body.Close()
                 body, err := ioutil.ReadAll(resp.Body)
                 if err != nil {
                         log.Fatalln(err)
                 }
-		log.Println("\nReturned value from server:\n",string(body))
+                log.Println("\nReturned value from server:\n",string(body))
+	}  else if taskName == "delete" && jobId > 0 {
+		client := &http.Client{}
+
+		// Create request
+		req, err := http.NewRequest("DELETE", "http://localhost:8080/jobs/"+strconv.Itoa(jobId), nil)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		// Fetch Request
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		defer resp.Body.Close()
+
+		// Read Response Body
+		respBody, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+		fmt.Println(err)
+		return
+		}
+		fmt.Println("response Body : ", string(respBody))
 	} else if taskName == "submit" {
 		if jobType == "isAlive" && IP != "" {
 			fmt.Printf("value of task:%s, jobtype:%s, ip:%s\n",taskName, jobType, IP)
