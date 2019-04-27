@@ -24,7 +24,7 @@ import (
 type Task struct {
 	Id          int
 	JobId       int
-	State       TaskState
+	State       common.TaskState
 	Params      []byte	// Allows for UnMarshalling to struct objects, as needed
 	WorkerId    int
 	Worker      Worker `gorm:"foreignkey:TaskId; association_foreignkey:Id"`
@@ -108,6 +108,7 @@ func (server *Server) startTask() {
 	}
 }
 
+
 func (server *Server) Schedule() {
 	db := server.db
 	connections := server.connections
@@ -159,12 +160,25 @@ func (server *Server) Schedule() {
 		}
 
 		index := 0
-		for (index < numWorkers) && (queuedTasks[index] != nil) && (freeWorkers[index] != nil) {
-			if (time.Now().Sub(freeWorkers[index].UpdatedAt)) > common.LifeCycle {
-				db.Delete(&(freeWorkers[index]))
-			} else
+
+		for i := 0; i < 2; i++ {
+			var arr []Task
+			if i == 0 {
+				arr = queuedTasks
+			} else {
+				arr = inProgressTasks
+			}
+
+			for (index < numWorkers) && (arr[index] != nil) && (freeWorkers[index] != nil) {
+				if (time.Now().Sub(freeWorkers[index].UpdatedAt).Seconds()) <= common.LifeCycle {
+					
+				}
+
+				index += 1
+			}
 		}
 
+		db.Where("updated_at <", Time.
 		time.Sleep(1.5 * time.Second)
 	}
 
@@ -210,12 +224,13 @@ type Context struct {
 }
 
 func ipTo32Bit(IP net.IP) int {
-	total := 0
-	power := 0
+	num := 0
+	power := 0.0
+	ipArray := IP[12:16]
 
 	for _, level := range ipArray {
 		shift := math.Pow(2, power)
-		total += (level * shift)
+		num += int((float64(level) * shift))
 		power += 8
 	}
 
@@ -223,15 +238,15 @@ func ipTo32Bit(IP net.IP) int {
 }
 
 func bitsToIP(value int) net.IP {
-	arr := make([]int, 4)
-	divisor := math.Pow(2, 32)
+	arr := make([]byte, 4)
+	divisor := int(math.Pow(2, 32))
 
 	for i := 0; i < 4; i++ {
-		section := 0
+		section := byte(0)
 		for j := 0; j < 8; j++ {
 			quotient := value / divisor
 			if quotient == 1 {
-				section += math.Pow(2, j)
+				section += byte(math.Pow(2, float64(j)))
 			}
 			divisor = divisor/2
 		}
@@ -283,11 +298,10 @@ func (s *Server) handleJobs(ctx *Context) {
 				}
 			}
 
-			if task.State != Complete {
+			if task.State != common.Complete {
 				completed = false
 			}
 
-			io.WriteString(w, task.Params+"\n")
 		}
 		return
 	case "POST":
@@ -307,7 +321,7 @@ func (s *Server) handleJobs(ctx *Context) {
 				db.Table("workers").Count(&workerCount)
 				tasks := make([]Task, workerCount)
 				if typVal == common.IsAliveJob {
-					IPSplit := strings.Split(jobParams.IpBlock, "/")
+					IPSplit := strings.Split(jobParams.Data.IpBlock, "/")
 					// IP struct stores most recent 32-bit IP address in final four bytes of array
 					IPBlock := net.ParseIP(IPSplit[0])[12:16]
 					IPMask := strconv.Atoi(IPSplit[1])
@@ -454,7 +468,7 @@ func main() {
 	go http.Serve(l, nil)
 
 	// start thread for Scheduler aspect of Server
-	go server.Schedule()
+//	go server.Schedule()
 
 	time.Sleep(3 * time.Second)
 	// start dummy task on one worker
