@@ -138,7 +138,7 @@ func TestMultipleScan(t *testing.T) {
 }
 
 func TestNormalScan(t *testing.T) {
-	result := NormalPortScan("10.0.0.11", PortRange{7000, 7009}, 3*time.Second)
+	result := NormalPortScan(net.ParseIP("10.0.0.11"), PortRange{7000, 7009}, 3*time.Second)
 	assert.Equal(t, len(result), 10)
 	for port, result := range result {
 		if port != 7000 {
