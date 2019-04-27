@@ -10,13 +10,13 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"math"
-	"net"
+//	"math"
+//	"net"
 	"net/http"
 	"net/rpc"
 	"regexp"
 	"strconv"
-	"strings"
+//	"strings"
 	"sync"
 	"time"
 )
@@ -107,8 +107,7 @@ func (server *Server) startTask() {
 		break
 	}
 }
-
-
+/*
 func (server *Server) Schedule() {
 	db := server.db
 	connections := server.connections
@@ -122,10 +121,11 @@ func (server *Server) Schedule() {
 			workerAvails[worker.Id] = common.Undetermined
 			numWorkers += 1
 		}
-		freeWorkers := make([Worker], numWorkers)
+		freeWorkers := make([]Worker, numWorkers)
 		freeWorkerIndex := 0
 
-		queuedTasks, inProgressTasks, completeTasks := make([Task], 0, numWorkers), make([Task], 0, numWorkers), make([Task], 0, numWorkers)
+		queuedTasks, inProgressTasks, completeTasks := make([]Task, 0, numWorkers), make([]Task, 0, numWorkers), make([]Task, 0, numWorkers)
+
 		queuedCount, inProgressCount, completeCount := 0, 0, 0
 		var tasks []Task
 		db.Find(&tasks)
@@ -154,36 +154,23 @@ func (server *Server) Schedule() {
 
 		for worker := range workerAvails {
 			if workerAvails[worker] == common.Undetermined {
-				freeWorkers[freeWorkerIndex]] = worker
+				freeWorkers[freeWorkerIndex] = worker
 				freeWorkerIndex += 1
 			}
 		}
 
 		index := 0
-
-		for i := 0; i < 2; i++ {
-			var arr []Task
-			if i == 0 {
-				arr = queuedTasks
-			} else {
-				arr = inProgressTasks
-			}
-
-			for (index < numWorkers) && (arr[index] != nil) && (freeWorkers[index] != nil) {
-				if (time.Now().Sub(freeWorkers[index].UpdatedAt).Seconds()) <= common.LifeCycle {
-					
-				}
-
-				index += 1
+		for (index < numWorkers) && (queuedTasks[index] != nil) && (freeWorkers[index] != nil) {
+			if (time.Now().Sub(freeWorkers[index].UpdatedAt)) > common.LifeCycle {
+				db.Delete(&(freeWorkers[index]))
 			}
 		}
 
-		db.Where("updated_at <", Time.
 		time.Sleep(1.5 * time.Second)
 	}
 
 }
-
+*/
 // https://gist.github.com/reagent/043da4661d2984e9ecb1ccb5343bf438
 // From the example under, "Custom Regular Expression-Based Router"
 
@@ -222,15 +209,14 @@ type Context struct {
 	Server   *Server
 	Params   []string
 }
-
+/*
 func ipTo32Bit(IP net.IP) int {
-	num := 0
-	power := 0.0
-	ipArray := IP[12:16]
+	total := 0
+	power := 0
 
 	for _, level := range ipArray {
 		shift := math.Pow(2, power)
-		num += int((float64(level) * shift))
+		total += (level * shift)
 		power += 8
 	}
 
@@ -238,15 +224,15 @@ func ipTo32Bit(IP net.IP) int {
 }
 
 func bitsToIP(value int) net.IP {
-	arr := make([]byte, 4)
-	divisor := int(math.Pow(2, 32))
+	arr := make([]int, 4)
+	divisor := math.Pow(2, 32)
 
 	for i := 0; i < 4; i++ {
-		section := byte(0)
+		section := 0
 		for j := 0; j < 8; j++ {
 			quotient := value / divisor
 			if quotient == 1 {
-				section += byte(math.Pow(2, float64(j)))
+				section += math.Pow(2, j)
 			}
 			divisor = divisor/2
 		}
@@ -256,7 +242,7 @@ func bitsToIP(value int) net.IP {
 	return net.IPv4(arr[0], arr[1], arr[2], arr[3])
 
 }
-
+*/
 func (s *Server) handleJobs(ctx *Context) {
 	r := ctx.Request
 	w := ctx.Response
@@ -281,9 +267,9 @@ func (s *Server) handleJobs(ctx *Context) {
 
                 task := tasks[0]
 
-                if task == "list" {
-                        rows, err := db.Table("jobs").Rows()
-                        if err != nil {
+		if task == "list" {
+			rows, err := db.Table("jobs").Rows()
+			if err != nil {
 				log.Fatal(err)
 			}
 			for rows.Next() {
@@ -294,66 +280,32 @@ func (s *Server) handleJobs(ctx *Context) {
 			return
 		} else if task == "view" {
 			id, ok := r.URL.Query()["id"]
-                        if !ok || len(id[0]) < 1 {
-                                log.Println("Id is missing")
-                                return
-                        }
-                        idval := id[0]
-                        rows, err := db.Table("jobs").Where("Id = ?", idval).Rows()
-                        if err != nil {
-                                log.Fatal(err)
-                        }
-                        for rows.Next() {
-                                var jobs Job
-                                rows.Scan(&jobs.Id, &jobs.Params)
-                                io.WriteString(w,"JobId: " + strconv.Itoa(jobs.Id) +" param:"+string(jobs.Params)+"\n")
-                        }
-                        fmt.Printf("Task is: %s , Id: is %s\n",task,idval)
-                        return
-                }  else if task == "delete" {
-                        id, ok := r.URL.Query()["id"]
-                        if !ok || len(id[0]) < 1 {
-                                log.Println("Id is missing")
-                                return
+			if !ok || len(id[0]) < 1 {
+				log.Println("Id is missing")
+				return
+			}
+			idval := id[0]
+			rows, err := db.Table("jobs").Where("Id = ?", idval).Rows()
+			if err != nil {
+				log.Fatal(err)
+			}
+			for rows.Next() {
+				var jobs Job
+				rows.Scan(&jobs.Id, &jobs.Params)
+				io.WriteString(w,"JobId: " + strconv.Itoa(jobs.Id) +" param:"+string(jobs.Params)+"\n")
+			}
+			fmt.Printf("Task is: %s , Id: is %s\n",task,idval)
+			return
+		}  else if task == "delete" {
+			id, ok := r.URL.Query()["id"]
+			if !ok || len(id[0]) < 1 {
+				log.Println("Id is missing")
+				return
 			}
 			idval := id[0]
 			fmt.Printf("Task is: %s , Id: is %s\n",task,idval)
 			return
 		}
-		/*
-		rows, err := db.Table("tasks").Joins("inner join jobs on jobs.id = tasks.job_id").Rows()
-		if err != nil {
-			log.Fatal(err)
-		}
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusOK)
-		jobId := -1
-		completed := true
-		for rows.Next() {
-			task := new(Task)
-			if err := rows.Scan(&(task.Id), &(task.JobId), &(task.State), &(task.Params), &(task.WorkerId), &(task.Result), &(task.CreatedAt), &(task.CompletedAt)); err != nil {
-				log.Fatal(err)
-			}
-
-			if task.JobId != jobId {
-				jobId = task.JobId
-				if jobId > 0 {
-					if completed == true {
-						io.WriteString(w, "Job "+strconv.Itoa(task.JobId)+": complete")
-					} else {
-						io.WriteString(w, "Job "+strconv.Itoa(task.JobId)+": incomplete")
-					}
-					completed = true
-					io.WriteString(w, "\n\n")
-				}
-			}
-
-			if task.State != common.Complete {
-				completed = false
-			}
-
-		}
-		return*/
 	case "POST":
 		b, err := ioutil.ReadAll(r.Body)
 				if err != nil {
@@ -365,20 +317,32 @@ func (s *Server) handleJobs(ctx *Context) {
 				if err != nil {
 					log.Fatal(err)
 				}
+				fmt.Printf("value of type is: %d\n",jobParams.Type)
 
 				typVal := jobParams.Type
-				var workerCount int
-				db.Table("workers").Count(&workerCount)
-				tasks := make([]Task, workerCount)
+//				var workerCount int
+//				db.Table("workers").Count(&workerCount)
+//				tasks := make([]Task, workerCount)
 				if typVal == common.IsAliveJob {
-					// Unmarshalling interface
 					var IsAlive common.JobIsAliveParam;
 					err = json.Unmarshal([]byte(jobParams.Data), &IsAlive)
 					if err != nil {
 						log.Fatal(err)
 					}
 					fmt.Printf("Value of Ipblock: %s\n",IsAlive.IpBlock)
-					IPSplit := strings.Split(IsAlive.IpBlock, "/")
+				} else {
+					var PortScan common.JobPortScanParam
+					err = json.Unmarshal([]byte(jobParams.Data), &PortScan)
+					if err != nil {
+						log.Fatal(err)
+					}
+					fmt.Printf("Value of Ip: %v\n",PortScan.Ip)
+					fmt.Printf("Value of ScanType: %d\n",PortScan.Type)
+					fmt.Printf("Value of StartPort: %d\n",PortScan.StartPort)
+					fmt.Printf("Value of EndPort: %d\n",PortScan.EndPort)
+				}
+					/*
+					IPSplit := strings.Split(jobParams.IpBlock, "/")
 					// IP struct stores most recent 32-bit IP address in final four bytes of array
 					IPBlock := net.ParseIP(IPSplit[0])[12:16]
 					IPMask := strconv.Atoi(IPSplit[1])
@@ -408,19 +372,11 @@ func (s *Server) handleJobs(ctx *Context) {
 					}
 
 				} else {
-					var PortScan common.JobPortScanParam
-					err = json.Unmarshal([]byte(jobParams.Data), &PortScan)
-					if err != nil {
-						log.Fatal(err)
-					}
-					fmt.Printf("Value of Ip: %v\n",PortScan.Ip)
-					fmt.Printf("Value of ScanType: %d\n",PortScan.Type)
-					fmt.Printf("Value of StartPort: %d\n",PortScan.StartPort)
-					fmt.Printf("Value of EndPort: %d\n",PortScan.EndPort)
-					IP := PortScan.Ip
-					Type := PortScan.Type
-					Start := PortScan.StartPort
-					End := PortScan.EndPort
+					IP := jobParams.Ip
+					Type := jobParams.Type
+					Range := jobParams.Range
+						Start := Range.Start
+					End := Range.End
 					rangeLength := (End - Start) + 1
 					quotientWork := (rangeLength/workerCount) - 1
 					remainderWork := math.Mod(rangeLength, workerCount)
@@ -446,25 +402,15 @@ func (s *Server) handleJobs(ctx *Context) {
 						db.Create(&task)
 						tasks[i] = task
 					}
-				}
-				job := Job{Params: b, Tasks: tasks}
+				}*/
+				job := Job{Params: b}
 				db.Create(&job)
 		return
+
 	}
 
 }
-/*
-func (s *Server) handleJobID(ctx *Context) {
-	r := ctx.Request
 
-	switch r.Method {
-	case "GET":
-		return
-	case "DELETE":
-		return
-	}
-}
-*/
 func main() {
 	var serverAddr string
 	var dbPath string
@@ -486,33 +432,24 @@ func main() {
 	db.AutoMigrate(&Task{})
 	db.AutoMigrate(&Worker{})
 
-/*		for i:= 0; i < 2; i++ {
-				var tasks []Task
-				for j:= 0; j < 3; j++ {
-					worker := new(Worker)
-					task := new(Task)
-					params := "Task" + strconv.Itoa(j)
-					task.Params = params
-					task.Worker = *worker
-					task.State = Queued
-					db.Create(task)
-					db.Create(worker)
-					tasks = append(tasks, *task)
-				}
-		                db.Create(&Job{
-		                        Params: fmt.Sprintf("FooBar %d", i),
-		                        Tasks: tasks,
-		                })
-		        }*/
 
 	server := new(Server)
 	server.db = db
 	server.connections = make(map[int]*rpc.Client)
 
-	//Star custom Mux, for dynamic routing from client-server interactions
-/*	server.Handle("/jobs/([0-9]+)$", func(ctx *Context) {
-		server.handleJobID(ctx)
-	})
+	/*Inserting dummy rows in job*/
+/*	message := map[string]interface{}{
+                                "type": "isAlive",
+                                "ip": "1.2",
+				"mode": "sys",
+				"range":"100-200",
+                        }
+	bytesRepresentation, err := json.Marshal(message)
+                        if err != nil {
+                                log.Fatalln(err)
+                        }
+	job := Job{Id:3,Params: bytesRepresentation}
+	db.Create(&job)
 */
 	server.Handle("/jobs/", func(ctx *Context) {
 		server.handleJobs(ctx)
@@ -522,6 +459,7 @@ func main() {
 	go http.ListenAndServe(serverAddr, server)
 
 	// start rpc server
+/*
 	rpc.Register(server)
 	rpc.HandleHTTP()
 	l, e := net.Listen("tcp", serverAddr)
@@ -531,9 +469,9 @@ func main() {
 
 	wg.Add(1)
 	go http.Serve(l, nil)
-
+*/
 	// start thread for Scheduler aspect of Server
-//	go server.Schedule()
+	//go server.Schedule()
 
 	time.Sleep(3 * time.Second)
 	// start dummy task on one worker
@@ -541,47 +479,3 @@ func main() {
 	wg.Wait()
 }
 
-/*func dbMain() {
-
-	// Create
-	var worker Worker
-	db.First(&worker, 0)
-	for i := 0; i < 10; i++ {
-		db.Create(&Job{
-			//State: Queued,
-			Params: fmt.Sprintf("FooBar %d", i),
-			Tasks: []Task{
-				{Params: "Task1", Worker: worker},
-				// {Params: "Task2", Worker: 1},
-			},
-		})
-	}
-
-	// List jobs
-	var jobs []Job
-	db.Find(&jobs)
-	fmt.Println(jobs)
-
-	// Read
-	var job1 Job
-	db.First(&job1, 1) // find product with id 1
-	fmt.Println(job1)
-
-	// Get Tasks
-	var job2 Job
-	db.Preload("Tasks").First(&job2, 1)
-	fmt.Println(job2)
-
-	// check job completed
-	//var tasks []Task
-	//var job3 Job
-	var count int
-	db.Table("tasks").Where("state != ? AND job_id = ?", Complete, 1).Count(&count)
-	//db.First(&job3, 1).Related(&tasks).Where("state != ? AND job_id = ?", Complete, 1).Count(&count);
-	fmt.Println(count)
-
-	// Delete - delete product
-	//db.Delete(&product)
-
-	db.Table("workers").Where("name = ?", "Worker1").Update("heartbeat_time", time.Now())
-}*/
