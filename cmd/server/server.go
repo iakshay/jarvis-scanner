@@ -238,113 +238,20 @@ func (s *Server) handleJobs(ctx *Context) {
 	switch r.Method {
 	//TODO: Just return each job's ID, params; for specific job's details, use its ID returned form this function
 	case "GET":
-		//Parsing get request
-		tasks, ok := r.URL.Query()["task"]
-
-		if !ok || len(tasks[0]) < 1 {
-			log.Println("Task is missing")
-			return
+		rows, err := db.Table("jobs").Rows()
+		if err != nil {
+			log.Fatal(err)
 		}
-
-		task := tasks[0]
-
-		if task == "list" {
-			rows, err := db.Table("jobs").Rows()
-			if err != nil {
-				log.Fatal(err)
-			}
-			for rows.Next() {
-				var job Job
-				rows.Scan(&job.Id, &job.Params)
-				io.WriteString(w, "JobId: "+strconv.Itoa(job.Id)+" param:"+string(job.Params)+"\n")
-			}
-			return
-		} else if task == "view" {
-			id, ok := r.URL.Query()["id"]
-			if !ok || len(id[0]) < 1 {
-				log.Println("Id is missing")
-				return
-			}
-			idval := id[0]
-			rows, err := db.Table("jobs").Where("Id = ?", idval).Rows()
-			if err != nil {
-				log.Fatal(err)
-			}
-			for rows.Next() {
-				var jobs Job
-				rows.Scan(&jobs.Id, &jobs.Params)
-				io.WriteString(w, "JobId: "+strconv.Itoa(jobs.Id)+" param:"+string(jobs.Params)+"\n")
-			}
-			fmt.Printf("Task is: %s , Id: is %s\n", task, idval)
-			return
-		} else if task == "delete" {
-			id, ok := r.URL.Query()["id"]
-			if !ok || len(id[0]) < 1 {
-				log.Println("Id is missing")
-				return
-			}
-			idval := id[0]
-			fmt.Printf("Task is: %s , Id: is %s\n", task, idval)
-			return
+		for rows.Next() {
+			var job Job
+			rows.Scan(&job.Id, &job.Params)
+			io.WriteString(w,"JobId: " + strconv.Itoa(job.Id) +" param:"+string(job.Params)+"\n")
 		}
+		return
 	case "POST":
 		b, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		var jobParams common.JobSubmitParam
-		err = json.Unmarshal(b, &jobParams)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		typVal := jobParams.Type
-		var workerCount int
-		db.Table("workers").Count(&workerCount)
-		if typVal == common.IsAliveJob {
-			// unmarshalling interface
-			var isAliveParam common.JobIsAliveParam
-			err = json.Unmarshal([]byte(jobParams.Data), &isAliveParam)
-			if err != nil {
-				log.Fatal(err)
-			}
-			ipRanges := common.SubnetSplit(isAliveParam.IpBlock, workerCount)
-			for _, ipRange := range ipRanges {
-				taskParamData := IsAliveParam{ipRange}
-				buf, e := json.Marshal(taskParamData)
-				if e != nil {
-					log.Fatal(e)
-				}
-
-				task := Task{common.Queued, buf}
-				db.Create(&task)
-			}
-
-		} else if typVal == common.PortScanJob {
-			var portScanParam common.JobPortScanParam
-			err = json.Unmarshal([]byte(jobParams.Data), &portScanParam)
-			if err != nil {
-				log.Fatal(err)
-			}
-			fmt.Printf("Value of Ip: %v\n", PortScan.Ip)
-			fmt.Printf("Value of ScanType: %d\n", PortScan.Type)
-			fmt.Printf("Value of StartPort: %d\n", PortScan.StartPort)
-			fmt.Printf("Value of EndPort: %d\n", PortScan.EndPort)
-			IP := PortScan.Ip
-			Type := PortScan.Type
-			Start := PortScan.StartPort
-			End := PortScan.EndPort
-			rangeLength := (End - Start) + 1
-			quotientWork := (rangeLength / workerCount) - 1
-			remainderWork := math.Mod(rangeLength, workerCount)
-			currStart := Start
-			var currEnd uint16
-			for i := 0; i < workerCount; i++ {
-				currEnd = currStart + quotientWork
-				if remainderWork > 0 {
-					currEnd += 1
-					remainderWork = remainderWork - 1
+				if err != nil {
+					log.Fatal(err)
 				}
 				taskRange := common.PortRange{currStart, currEnd}
 				taskParamData := common.PortScanParam{Type, IP, taskRange}
@@ -370,11 +277,31 @@ func (s *Server) handleJobs(ctx *Context) {
 
 func (s *Server) handleJobID(ctx *Context) {
 	r := ctx.Request
+	param := ctx.Params
+	w := ctx.Response
+	db := s.db
+
+	var id int
+	id, err := strconv.Atoi(param[0])
+	if err != nil {
+		log.Fatalln(err)
+	}
+	fmt.Printf("id is %d\n",id)
 
 	switch r.Method {
 	case "GET":
+		rows, err := db.Table("jobs").Where("Id = ?", id).Rows()
+		if err != nil {
+			log.Fatal(err)
+		}
+		for rows.Next() {
+			var jobs Job
+			rows.Scan(&jobs.Id, &jobs.Params)
+			io.WriteString(w,"JobId: " + strconv.Itoa(jobs.Id) +" param:"+string(jobs.Params)+"\n")
+		}
 		return
 	case "DELETE":
+		fmt.Println("Delete\n");
 		return
 	}
 }
