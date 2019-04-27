@@ -302,33 +302,16 @@ func (s *Server) handleJobs(ctx *Context) {
 		typVal := jobParams.Type
 		var workerCount int
 		db.Table("workers").Count(&workerCount)
-		tasks := make([]Task, workerCount)
 		if typVal == common.IsAliveJob {
-			// Unmarshalling interface
-			var IsAlive common.JobIsAliveParam
-			err = json.Unmarshal([]byte(jobParams.Data), &IsAlive)
+			// unmarshalling interface
+			var isAliveParam common.JobIsAliveParam
+			err = json.Unmarshal([]byte(jobParams.Data), &isAliveParam)
 			if err != nil {
 				log.Fatal(err)
 			}
-			fmt.Printf("Value of Ipblock: %s\n", IsAlive.IpBlock)
-			IPSplit := strings.Split(IsAlive.IpBlock, "/")
-			// IP struct stores most recent 32-bit IP address in final four bytes of array
-			IPBlock := net.ParseIP(IPSplit[0]).To4()
-			IPMask, _ := strconv.Atoi(IPSplit[1])
-			subnetSize := 1 << (32 - IPMask)
-			quotientWork := subnetSize / workerCount
-			remainderWork := math.Mod(subnetSize, workerCount)
-			IP32Rep := ipTo32Bit(IPBlock)
-			for i := 0; i < workerCount; i++ {
-				nextIP32Base := IP32Rep + quotientWork
-				if remainderWork > 0 {
-					nextIP32Base += 1
-					remainderWork = remainderWork - 1
-				}
-				startIP := bitsToIP(IP32Rep)
-				endIP := bitsToIP(nextIP32Base) - 1
-				IpRange := IpRange{startIP, endIP}
-				taskParamData := IsAliveParam{IpRange}
+			ipRanges := common.SubnetSplit(isAliveParam.IpBlock, workerCount)
+			for _, ipRange := range ipRanges {
+				taskParamData := IsAliveParam{ipRange}
 				buf, e := json.Marshal(taskParamData)
 				if e != nil {
 					log.Fatal(e)
@@ -336,13 +319,11 @@ func (s *Server) handleJobs(ctx *Context) {
 
 				task := Task{common.Queued, buf}
 				db.Create(&task)
-				tasks[i] = task
-				IP32Rep = nextIP32Base
 			}
 
-		} else {
-			var PortScan common.JobPortScanParam
-			err = json.Unmarshal([]byte(jobParams.Data), &PortScan)
+		} else if typVal == common.PortScanJob {
+			var portScanParam common.JobPortScanParam
+			err = json.Unmarshal([]byte(jobParams.Data), &portScanParam)
 			if err != nil {
 				log.Fatal(err)
 			}
