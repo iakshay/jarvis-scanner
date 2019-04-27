@@ -10,13 +10,11 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"math"
-	"net"
+	//"net"
 	"net/http"
 	"net/rpc"
 	"regexp"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -235,6 +233,7 @@ func (s *Server) handleJobs(ctx *Context) {
 		return
 	}
 
+	var tasks []Task
 	switch r.Method {
 	//TODO: Just return each job's ID, params; for specific job's details, use its ID returned form this function
 	case "GET":
@@ -245,16 +244,61 @@ func (s *Server) handleJobs(ctx *Context) {
 		for rows.Next() {
 			var job Job
 			rows.Scan(&job.Id, &job.Params)
-			io.WriteString(w,"JobId: " + strconv.Itoa(job.Id) +" param:"+string(job.Params)+"\n")
+			io.WriteString(w, "JobId: "+strconv.Itoa(job.Id)+" param:"+string(job.Params)+"\n")
 		}
-		return
 	case "POST":
 		b, err := ioutil.ReadAll(r.Body)
-				if err != nil {
-					log.Fatal(err)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		var jobParams common.JobSubmitParam
+		err = json.Unmarshal(b, &jobParams)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		typVal := jobParams.Type
+		var workerCount int
+		db.Table("workers").Count(&workerCount)
+		if typVal == common.IsAliveJob {
+			// unmarshalling interface
+			var isAliveParam common.JobIsAliveParam
+			err = json.Unmarshal([]byte(jobParams.Data), &isAliveParam)
+			if err != nil {
+				log.Fatal(err)
+			}
+			ipRanges := common.SubnetSplit(isAliveParam.IpBlock, workerCount)
+			for _, ipRange := range ipRanges {
+				taskParamData := common.IsAliveParam{ipRange}
+				buf, e := json.Marshal(taskParamData)
+				if e != nil {
+					log.Fatal(e)
+				}
+
+				tasks = append(tasks, Task{State: common.Queued, Params: buf})
+				//db.Create(&task)
+			}
+
+		} else if typVal == common.PortScanJob {
+			var portScanParam common.JobPortScanParam
+			err = json.Unmarshal([]byte(jobParams.Data), &portScanParam)
+			if err != nil {
+				log.Fatal(err)
+			}
+			rangeLength := (portScanParam.EndPort - portScanParam.StartPort) + 1
+			quotientWork := (rangeLength / uint16(workerCount)) - 1
+			remainderWork := rangeLength % uint16(workerCount)
+			currStart := portScanParam.StartPort
+			var currEnd uint16
+			for i := 0; i < workerCount; i++ {
+				currEnd = currStart + quotientWork
+				if remainderWork > 0 {
+					currEnd += 1
+					remainderWork = remainderWork - 1
 				}
 				taskRange := common.PortRange{currStart, currEnd}
-				taskParamData := common.PortScanParam{Type, IP, taskRange}
+				taskParamData := common.PortScanParam{portScanParam.Type, portScanParam.Ip, taskRange}
 
 				buf, e := json.Marshal(taskParamData)
 				if e != nil {
@@ -263,9 +307,8 @@ func (s *Server) handleJobs(ctx *Context) {
 
 				currStart = currEnd + 1
 
-				task := Task{Queued, buf}
-				db.Create(&task)
-				tasks[i] = task
+				tasks = append(tasks, Task{State: common.Queued, Params: buf})
+				//db.Create(&task)
 			}
 		}
 		job := Job{Params: b, Tasks: tasks}
@@ -286,7 +329,7 @@ func (s *Server) handleJobID(ctx *Context) {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	fmt.Printf("id is %d\n",id)
+	fmt.Printf("id is %d\n", id)
 
 	switch r.Method {
 	case "GET":
@@ -297,11 +340,11 @@ func (s *Server) handleJobID(ctx *Context) {
 		for rows.Next() {
 			var jobs Job
 			rows.Scan(&jobs.Id, &jobs.Params)
-			io.WriteString(w,"JobId: " + strconv.Itoa(jobs.Id) +" param:"+string(jobs.Params)+"\n")
+			io.WriteString(w, "JobId: "+strconv.Itoa(jobs.Id)+" param:"+string(jobs.Params)+"\n")
 		}
 		return
 	case "DELETE":
-		fmt.Println("Delete\n");
+		fmt.Println("Delete\n")
 		return
 	}
 }
@@ -344,20 +387,11 @@ func main() {
 	go http.ListenAndServe(serverAddr, server)
 
 	// start rpc server
-	rpc.Register(server)
-	rpc.HandleHTTP()
-	l, e := net.Listen("tcp", serverAddr)
-	if e != nil {
-		log.Fatal("listen error:", e)
-	}
-
-	wg.Add(1)
-	go http.Serve(l, nil)
+	//rpc.Register(server)
 
 	// start thread for Scheduler aspect of Server
 	//	go server.Schedule()
 
-	time.Sleep(3 * time.Second)
 	// start dummy task on one worker
 	//	server.startTask()
 	wg.Wait()

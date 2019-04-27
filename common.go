@@ -18,19 +18,19 @@ type TaskData interface{}
 type JobSubmitData interface{}
 
 const (
-	LifeCycle	time.Duration = time.Second
+	LifeCycle time.Duration = time.Second
 )
 
 const (
-        Queued     TaskState = 0
-        InProgress TaskState = 1
-        Complete   TaskState = 2
+	Queued     TaskState = 0
+	InProgress TaskState = 1
+	Complete   TaskState = 2
 )
 
 const (
-	Undetermined	WorkerState = 0
-	Unavailable	WorkerState = -1
-	Available	WorkerState = 1
+	Undetermined WorkerState = 0
+	Unavailable  WorkerState = -1
+	Available    WorkerState = 1
 )
 
 const (
@@ -160,10 +160,10 @@ type JobIsAliveParam struct {
 }
 
 type JobPortScanParam struct {
-	Ip    net.IP `json:"Ip,omitempty"`
-	Type  PortScanType `json:"ScanType,omitempty"`
-	StartPort uint16 `json:"Start,omitempty"`
-	EndPort uint16 `json:"End,omitempty"`
+	Ip        net.IP       `json:"Ip,omitempty"`
+	Type      PortScanType `json:"ScanType,omitempty"`
+	StartPort uint16       `json:"Start,omitempty"`
+	EndPort   uint16       `json:"End,omitempty"`
 }
 
 //
