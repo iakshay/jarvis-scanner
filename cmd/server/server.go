@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	common "github.com/iakshay/jarvis-scanner"
@@ -18,6 +19,8 @@ import (
 	"sync"
 	"time"
 )
+
+const NotAllocatedWorkerId int = -1
 
 type Task struct {
 	Id          int
@@ -226,10 +229,34 @@ type Context struct {
 	Params   []string
 }
 
+func (c *Context) Text(code int, body string) {
+	c.Response.Header().Set("Content-Type", "application/json")
+	c.Response.WriteHeader(code)
+
+	payload := struct {
+		Message string
+	}{body}
+	json.NewEncoder(c.Response).Encode(payload)
+}
+
+func (c *Context) Json(code int, body interface{}) {
+	c.Response.Header().Set("Content-Type", "application/json")
+	c.Response.WriteHeader(code)
+
+	json.NewEncoder(c.Response).Encode(body)
+}
+
+func (c *Context) Error(code int, err error) {
+	log.Println(code, err)
+	c.Text(code, err.Error())
+}
+
 func (s *Server) handleJobs(ctx *Context) {
 	r := ctx.Request
 	w := ctx.Response
 	db := s.db
+
+	log.Printf("%s /jobs", r.Method)
 
 	if r.URL.Path != "/jobs/" {
 		w := ctx.Response
@@ -251,72 +278,85 @@ func (s *Server) handleJobs(ctx *Context) {
 			io.WriteString(w, "JobId: "+strconv.Itoa(job.Id)+" param:"+string(job.Params)+"\n")
 		}
 	case "POST":
+		contentType := r.Header.Get("Content-type")
+
+		if contentType != "application/json" {
+			ctx.Error(http.StatusBadRequest, errors.New("invalid content type"))
+			return
+		}
+
 		b, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			log.Fatal(err)
+			ctx.Error(http.StatusBadRequest, err)
+			return
 		}
 
 		var jobParams common.JobSubmitParam
 		err = json.Unmarshal(b, &jobParams)
 		if err != nil {
-			log.Fatal(err)
+			ctx.Error(http.StatusBadRequest, err)
+			return
 		}
 
-		typVal := jobParams.Type
+		jobType := jobParams.Type
 		var workerCount int
 		db.Table("workers").Count(&workerCount)
-		if typVal == common.IsAliveJob {
+		log.Printf("JobType: %v WorkerCount:%d", jobType, workerCount)
+		if jobType == common.IsAliveJob {
 			// unmarshalling interface
 			var isAliveParam common.JobIsAliveParam
 			err = json.Unmarshal([]byte(jobParams.Data), &isAliveParam)
 			if err != nil {
-				log.Fatal(err)
+				ctx.Error(http.StatusBadRequest, err)
+				return
 			}
-			ipRanges := common.SubnetSplit(isAliveParam.IpBlock, workerCount)
+			// validates ip or subnet
+			ipRanges, err := common.SubnetSplit(isAliveParam.IpBlock, workerCount)
+			if err != nil {
+				ctx.Error(http.StatusBadRequest, err)
+				return
+			}
 			for _, ipRange := range ipRanges {
 				taskParamData := common.IsAliveParam{ipRange}
-				buf, e := json.Marshal(taskParamData)
-				if e != nil {
-					log.Fatal(e)
+				buf, err := json.Marshal(taskParamData)
+				if err != nil {
+					log.Fatal(err)
+					return
 				}
 
-				tasks = append(tasks, Task{State: common.Queued, Params: buf})
-				//db.Create(&task)
+				tasks = append(tasks, Task{WorkerId: NotAllocatedWorkerId, State: common.Queued, Params: buf})
 			}
 
-		} else if typVal == common.PortScanJob {
+		} else if jobType == common.PortScanJob {
 			var portScanParam common.JobPortScanParam
 			err = json.Unmarshal([]byte(jobParams.Data), &portScanParam)
 			if err != nil {
-				log.Fatal(err)
+				ctx.Error(http.StatusBadRequest, err)
+				return
 			}
-			rangeLength := (portScanParam.EndPort - portScanParam.StartPort) + 1
-			quotientWork := (rangeLength / uint16(workerCount)) - 1
-			remainderWork := rangeLength % uint16(workerCount)
-			currStart := portScanParam.StartPort
-			var currEnd uint16
-			for i := 0; i < workerCount; i++ {
-				currEnd = currStart + quotientWork
-				if remainderWork > 0 {
-					currEnd += 1
-					remainderWork = remainderWork - 1
-				}
-				taskRange := common.PortRange{currStart, currEnd}
-				taskParamData := common.PortScanParam{portScanParam.Type, portScanParam.Ip, taskRange}
+			log.Printf("Request: %v", portScanParam)
+			err := portScanParam.Validate()
+			if err != nil {
+				ctx.Error(http.StatusBadRequest, err)
+				return
+			}
+
+			ip := net.ParseIP(portScanParam.Ip).To4()
+			log.Println(workerCount, common.PortRangeSplit(portScanParam.PortRange, workerCount))
+			for _, portRange := range common.PortRangeSplit(portScanParam.PortRange, workerCount) {
+				taskParamData := common.PortScanParam{portScanParam.Type, ip, portRange}
 
 				buf, e := json.Marshal(taskParamData)
 				if e != nil {
 					log.Fatal(e)
 				}
 
-				currStart = currEnd + 1
-
-				tasks = append(tasks, Task{State: common.Queued, Params: buf})
-				//db.Create(&task)
+				tasks = append(tasks, Task{WorkerId: NotAllocatedWorkerId, State: common.Queued, Params: buf})
 			}
 		}
 		job := Job{Params: b, Tasks: tasks}
 		db.Create(&job)
+		ctx.Text(http.StatusOK, "Successfully submitted job")
 		return
 	}
 
@@ -324,16 +364,15 @@ func (s *Server) handleJobs(ctx *Context) {
 
 func (s *Server) handleJobID(ctx *Context) {
 	r := ctx.Request
-	param := ctx.Params
-	w := ctx.Response
+	params := ctx.Params
 	db := s.db
 
 	var id int
-	id, err := strconv.Atoi(param[0])
+	id, err := strconv.Atoi(params[0])
 	if err != nil {
 		log.Fatalln(err)
 	}
-	fmt.Printf("id is %d\n", id)
+	log.Printf("%s /jobs/%s JobId: %d", r.Method, params[0], id)
 
 	switch r.Method {
 	case "GET":
@@ -344,11 +383,11 @@ func (s *Server) handleJobID(ctx *Context) {
 		for rows.Next() {
 			var jobs Job
 			rows.Scan(&jobs.Id, &jobs.Params)
-			io.WriteString(w, "JobId: "+strconv.Itoa(jobs.Id)+" param:"+string(jobs.Params)+"\n")
+			io.WriteString(ctx.Response, "JobId: "+strconv.Itoa(jobs.Id)+" param:"+string(jobs.Params)+"\n")
 		}
 		return
 	case "DELETE":
-		fmt.Println("Delete\n")
+		io.WriteString(ctx.Response, "Delete\n")
 		return
 	}
 }

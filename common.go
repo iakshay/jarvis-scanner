@@ -160,10 +160,9 @@ type JobIsAliveParam struct {
 }
 
 type JobPortScanParam struct {
-	Ip        net.IP       `json:"Ip,omitempty"`
-	Type      PortScanType `json:"ScanType,omitempty"`
-	StartPort uint16       `json:"Start,omitempty"`
-	EndPort   uint16       `json:"End,omitempty"`
+	Type      PortScanType
+	Ip        string
+	PortRange PortRange
 }
 
 //
@@ -201,6 +200,21 @@ type WorkerTaskData struct {
 type JobDetailReply struct {
 	JobId int
 	Data  []WorkerTaskData
+}
+
+//
+// validate PortScanParam
+func (param *JobPortScanParam) Validate() error {
+	if ip := net.ParseIP(param.Ip); ip == nil || ip.To4() == nil {
+		return errors.New("Invalid IPv4 address")
+	}
+	if param.Type != NormalScan && param.Type != SynScan && param.Type != FinScan {
+		return errors.New("Invalid port scan type")
+	}
+	if param.PortRange.Start < 0 || param.PortRange.End < 0 || param.PortRange.Start > param.PortRange.End {
+		return errors.New("Invalid port port range")
+	}
+	return nil
 }
 
 //
