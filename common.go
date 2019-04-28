@@ -117,8 +117,8 @@ type IpResult struct {
 }
 
 type PortRange struct {
-	Start uint16
-	End   uint16
+	Start uint16 `json:"Start"`
+	End   uint16  `json:"End"`
 }
 
 type PortResult struct {
@@ -162,7 +162,7 @@ type JobIsAliveParam struct {
 type JobPortScanParam struct {
 	Type      PortScanType
 	Ip        string
-	PortRange PortRange
+	PortRange PortRange `json:"PortRange"`
 }
 
 //
@@ -179,7 +179,7 @@ type JobSubmitReply struct{}
 type JobListParam struct{}
 type JobInfo struct {
 	JobId int
-	Type  string // TaskType
+	JobName  string // TaskType
 	Data  JobSubmitData
 }
 type JobListReply struct {
