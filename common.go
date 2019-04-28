@@ -18,7 +18,7 @@ type TaskData interface{}
 type JobSubmitData interface{}
 
 const (
-	LifeCycle time.Duration = time.Second
+	HeartbeatInterval time.Duration = time.Second
 )
 
 const (

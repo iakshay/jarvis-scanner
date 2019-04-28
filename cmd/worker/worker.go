@@ -76,16 +76,15 @@ func (worker *Worker) RunHearbeat() {
 	args := &common.HeartbeatArgs{WorkerId: worker.Id}
 	var reply common.HeartbeatReply
 	for {
-		fmt.Println("Sending hearbeat")
 		worker.Client.Call("Server.Heartbeat", args, &reply)
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(common.HeartbeatInterval)
 	}
 }
 
 func main() {
 	var serverAddr string
 	var workerAddr string
-	flag.StringVar(&serverAddr, "serverAddr", "localhost:8080", "address of the server")
+	flag.StringVar(&serverAddr, "serverAddr", "localhost:8081", "address of the server")
 	flag.StringVar(&workerAddr, "workerAddr", "localhost:7070", "address of the worker")
 	flag.Parse()
 	var wg sync.WaitGroup

@@ -10,7 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	//"net"
+	"net"
 	"net/http"
 	"net/rpc"
 	"regexp"
@@ -49,11 +49,15 @@ type Worker struct {
 type Server struct {
 	db *gorm.DB
 
-	connections map[int]*rpc.Client
-	Routes      []Route
+	Routes []Route
 }
 
-func (server *Server) RegisterWorker(args *common.RegisterWorkerArgs, reply *common.RegisterWorkerReply) error {
+type RpcService struct {
+	db          *gorm.DB
+	connections map[int]*rpc.Client
+}
+
+func (service *RpcService) RegisterWorker(args *common.RegisterWorkerArgs, reply *common.RegisterWorkerReply) error {
 	fmt.Println("Register worker", args)
 
 	// init connection to worker
@@ -64,38 +68,38 @@ func (server *Server) RegisterWorker(args *common.RegisterWorkerArgs, reply *com
 
 	// insert entry in workers table
 	worker := &Worker{Name: args.Name, Address: args.Address}
-	if err := server.db.Create(worker).Error; err != nil {
+	if err := service.db.Create(worker).Error; err != nil {
 		log.Printf("Error creating worker %s\n", args.Name)
 	}
 
 	log.Println("created worker %d\n", worker.Id)
-	server.connections[worker.Id] = client
+	service.connections[worker.Id] = client
 
 	reply.WorkerId = worker.Id
 	return nil
 }
 
-func (server *Server) CompleteTask(args *common.CompleteTaskArgs, reply *common.CompleteTaskReply) error {
+func (service *RpcService) CompleteTask(args *common.CompleteTaskArgs, reply *common.CompleteTaskReply) error {
 	fmt.Println("Complete task", args)
 
 	// insert entry in reports table
-	if err := server.db.Table("tasks").Where("Id = ?", args.TaskId).Update("result", args.Result).Error; err != nil {
+	if err := service.db.Table("tasks").Where("Id = ?", args.TaskId).Update("result", args.Result).Error; err != nil {
 		log.Printf("Error adding resort for TaskId %d\n", args.TaskId)
 	}
 	return nil
 }
 
-func (server *Server) Heartbeat(args *common.HeartbeatArgs, reply *common.HeartbeatReply) error {
+func (service *RpcService) Heartbeat(args *common.HeartbeatArgs, reply *common.HeartbeatReply) error {
 	fmt.Println("Send heartbeat", args)
 
 	// update worker hearbeat
-	if err := server.db.Table("workers").Where("Id = ?", args.WorkerId).Update("updated_at", time.Now()).Error; err != nil {
+	if err := service.db.Table("workers").Where("Id = ?", args.WorkerId).Update("updated_at", time.Now()).Error; err != nil {
 		log.Printf("Error updating hearbeat for worker %d\n", args.WorkerId)
 	}
 	return nil
 }
 
-func (server *Server) startTask() {
+/*func (server *Server) startTask() {
 
 	for id, client := range server.connections {
 		fmt.Printf("sending task to worker id: %d \n", id)
@@ -104,7 +108,7 @@ func (server *Server) startTask() {
 		client.Call("Worker.SendTask", args, reply)
 		break
 	}
-}
+}*/
 
 /*
 func (server *Server) Schedule() {
@@ -351,8 +355,10 @@ func (s *Server) handleJobID(ctx *Context) {
 
 func main() {
 	var serverAddr string
+	var rpcAddr string
 	var dbPath string
-	flag.StringVar(&serverAddr, "serverAddr", "localhost:8080", "address of the server")
+	flag.StringVar(&serverAddr, "serverAddr", "localhost:8080", "address of http service")
+	flag.StringVar(&rpcAddr, "rpcAddr", "localhost:8081", "address of rpc service")
 	flag.StringVar(&dbPath, "db", "test.db", "database path")
 	flag.Parse()
 	fmt.Println("starting server")
@@ -372,7 +378,6 @@ func main() {
 
 	server := new(Server)
 	server.db = db
-	server.connections = make(map[int]*rpc.Client)
 
 	//Star custom Mux, for dynamic routing from client-server interactions
 	server.Handle("/jobs/([0-9]+)$", func(ctx *Context) {
@@ -387,12 +392,21 @@ func main() {
 	go http.ListenAndServe(serverAddr, server)
 
 	// start rpc server
-	//rpc.Register(server)
+	service := new(RpcService)
+	service.db = db
+	service.connections = make(map[int]*rpc.Client)
+
+	rpc.RegisterName("Server", service)
+	rpc.HandleHTTP()
+	l, e := net.Listen("tcp", rpcAddr)
+	if e != nil {
+		log.Fatal("listen error:", e)
+	}
+	wg.Add(1)
+	go http.Serve(l, nil)
 
 	// start thread for Scheduler aspect of Server
 	//	go server.Schedule()
 
-	// start dummy task on one worker
-	//	server.startTask()
 	wg.Wait()
 }
