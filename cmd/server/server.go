@@ -36,6 +36,7 @@ type Task struct {
 
 type Job struct {
 	Id     int
+	JobName string
 	Params []byte
 	Tasks  []Task `gorm:"foreignkey:JobId;association_foreignkey:Id"`
 }
@@ -272,11 +273,20 @@ func (s *Server) handleJobs(ctx *Context) {
 		if err != nil {
 			log.Fatal(err)
 		}
+		var Reply common.JobListReply
+		var ReplyDetail common.JobInfo
 		for rows.Next() {
 			var job Job
-			rows.Scan(&job.Id, &job.Params)
-			io.WriteString(w, "JobId: "+strconv.Itoa(job.Id)+" param:"+string(job.Params)+"\n")
+			rows.Scan(&job.Id, &job.JobName,&job.Params)
+			io.WriteString(w,"JobId: " + strconv.Itoa(job.Id) +" Name: "+string(job.JobName)+
+                                        " param:"+string(job.Params)+"\n")
+			ReplyDetail.JobId = job.Id
+			ReplyDetail.JobName = string(job.JobName)
+			ReplyDetail.Data = string(job.Params)
+			Reply.Jobs = append(Reply.Jobs,ReplyDetail)
 		}
+		ctx.Json(http.StatusOK, Reply)
+		return
 	case "POST":
 		contentType := r.Header.Get("Content-type")
 
@@ -299,10 +309,12 @@ func (s *Server) handleJobs(ctx *Context) {
 		}
 
 		jobType := jobParams.Type
+		var Name string
 		var workerCount int
 		db.Table("workers").Count(&workerCount)
 		log.Printf("JobType: %v WorkerCount:%d", jobType, workerCount)
 		if jobType == common.IsAliveJob {
+			Name = "IsAlive"
 			// unmarshalling interface
 			var isAliveParam common.JobIsAliveParam
 			err = json.Unmarshal([]byte(jobParams.Data), &isAliveParam)
@@ -328,6 +340,7 @@ func (s *Server) handleJobs(ctx *Context) {
 			}
 
 		} else if jobType == common.PortScanJob {
+			Name = "PortScan"
 			var portScanParam common.JobPortScanParam
 			err = json.Unmarshal([]byte(jobParams.Data), &portScanParam)
 			if err != nil {
@@ -354,7 +367,7 @@ func (s *Server) handleJobs(ctx *Context) {
 				tasks = append(tasks, Task{WorkerId: NotAllocatedWorkerId, State: common.Queued, Params: buf})
 			}
 		}
-		job := Job{Params: b, Tasks: tasks}
+		job := Job{JobName:Name, Params: b, Tasks: tasks}
 		db.Create(&job)
 		ctx.Text(http.StatusOK, "Successfully submitted job")
 		return
@@ -382,9 +395,11 @@ func (s *Server) handleJobID(ctx *Context) {
 		}
 		for rows.Next() {
 			var jobs Job
-			rows.Scan(&jobs.Id, &jobs.Params)
-			io.WriteString(ctx.Response, "JobId: "+strconv.Itoa(jobs.Id)+" param:"+string(jobs.Params)+"\n")
+			rows.Scan(&jobs.Id, &jobs.JobName, &jobs.Params)
+//			io.WriteString(w,"JobId: " + strconv.Itoa(job.Id) +" Name: "+string(job.JobName)+
+  //                                      " param:"+string(job.Params)+"\n")
 		}
+//		rows, err := db.Table("tasks").Joins("inner join jobs on jobs.id = tasks.job_id").Rows()
 		return
 	case "DELETE":
 		io.WriteString(ctx.Response, "Delete\n")
@@ -418,6 +433,8 @@ func main() {
 	server := new(Server)
 	server.db = db
 
+	//db.Exec("DROP TABLE jobs;")
+	//db.Exec("DROP TABLE tasks;")
 	//Star custom Mux, for dynamic routing from client-server interactions
 	server.Handle("/jobs/([0-9]+)$", func(ctx *Context) {
 		server.handleJobID(ctx)

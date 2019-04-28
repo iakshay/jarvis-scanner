@@ -157,10 +157,14 @@ func main() {
                                 log.Fatalln(err)
                         }
 			//creating post request for portScan
-			message := map[string]interface{}{
+/*			message := map[string]interface{}{
                                 "Type": 1,
 				"Data": map[string]interface{}{ "Ip":IpAddress, "ScanType": ScanType, "Start" : ValStart, "End": ValEnd},
-			}
+			}*/
+			message := map[string]interface{}{
+                                "Type": 1,
+                                "Data": map[string]interface{}{ "Ip":IpAddress, "Type": ScanType, "PortRange" : map[string]interface{}{ "Start": ValStart, "End": ValEnd},},
+                        }
                         bytesRepresentation, err := json.Marshal(message)
                         if err != nil {
                                 log.Fatalln(err)
