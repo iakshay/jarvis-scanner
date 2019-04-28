@@ -387,7 +387,12 @@ func (s *Server) handleJobID(ctx *Context) {
 		}
 		return
 	case "DELETE":
-		io.WriteString(ctx.Response, "Delete\n")
+		if db.Delete(&Job{}, "id = ?", id).Error != nil {
+			ctx.Text(http.StatusBadRequest, "Failed to delete job")
+		} else {
+			ctx.Text(http.StatusOK, "Failed to delete job")
+		}
+
 		return
 	}
 }
