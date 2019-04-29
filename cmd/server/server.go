@@ -34,10 +34,10 @@ type Task struct {
 }
 
 type Job struct {
-	Id      int
-	JobName string
-	Params  []byte
-	Tasks   []Task `gorm:"foreignkey:JobId;association_foreignkey:Id"`
+	Id     int
+	Type   common.JobType
+	Params []byte
+	Tasks  []Task `gorm:"foreignkey:JobId;association_foreignkey:Id"`
 }
 
 type Worker struct {
@@ -274,10 +274,26 @@ func (s *Server) handleJobs(ctx *Context) {
 		var replyDetail common.JobInfo
 		for rows.Next() {
 			var job Job
-			rows.Scan(&job.Id, &job.JobName, &job.Params)
+			rows.Scan(&job.Id, &job.Type, &job.Params)
 			replyDetail.JobId = job.Id
-			replyDetail.JobName = string(job.JobName)
-			replyDetail.Data = string(job.Params)
+			replyDetail.Type = job.Type.String()
+			if job.Type == common.IsAliveJob {
+				var isAliveParam common.JobIsAliveParam
+				err = json.Unmarshal([]byte(job.Params), &isAliveParam)
+				if err != nil {
+					log.Fatal(err)
+					return
+				}
+				replyDetail.Data = isAliveParam
+			} else if job.Type == common.PortScanJob {
+				var portScanParam common.JobPortScanParam
+				err = json.Unmarshal([]byte(job.Params), &portScanParam)
+				if err != nil {
+					log.Fatal(err)
+					return
+				}
+				replyDetail.Data = portScanParam
+			}
 			reply.Jobs = append(reply.Jobs, replyDetail)
 		}
 		ctx.Json(http.StatusOK, reply)
@@ -304,12 +320,10 @@ func (s *Server) handleJobs(ctx *Context) {
 		}
 
 		jobType := jobParams.Type
-		var Name string
 		var workerCount int
 		db.Table("workers").Count(&workerCount)
 		log.Printf("JobType: %v WorkerCount:%d", jobType, workerCount)
 		if jobType == common.IsAliveJob {
-			Name = "IsAlive"
 			// unmarshalling interface
 			var isAliveParam common.JobIsAliveParam
 			err = json.Unmarshal([]byte(jobParams.Data), &isAliveParam)
@@ -335,7 +349,6 @@ func (s *Server) handleJobs(ctx *Context) {
 			}
 
 		} else if jobType == common.PortScanJob {
-			Name = "PortScan"
 			var portScanParam common.JobPortScanParam
 			err = json.Unmarshal([]byte(jobParams.Data), &portScanParam)
 			if err != nil {
@@ -362,7 +375,7 @@ func (s *Server) handleJobs(ctx *Context) {
 				tasks = append(tasks, Task{WorkerId: NotAllocatedWorkerId, State: common.Queued, Params: buf})
 			}
 		}
-		job := Job{JobName: Name, Params: b, Tasks: tasks}
+		job := Job{Type: jobType, Params: jobParams.Data, Tasks: tasks}
 		db.Create(&job)
 		ctx.Text(http.StatusOK, "Successfully submitted job")
 		return
@@ -389,8 +402,8 @@ func (s *Server) handleJobID(ctx *Context) {
 			log.Fatal(err)
 		}
 		for rows.Next() {
-			var jobs Job
-			rows.Scan(&jobs.Id, &jobs.JobName, &jobs.Params)
+			//var jobs Job
+			//rows.Scan(&jobs.Id, &jobs.JobName, &jobs.Params)
 			//			io.WriteString(w,"JobId: " + strconv.Itoa(job.Id) +" Name: "+string(job.JobName)+
 			//                                      " param:"+string(job.Params)+"\n")
 		}
