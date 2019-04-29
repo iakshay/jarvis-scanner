@@ -402,7 +402,7 @@ func (s *Server) handleJobID(ctx *Context) {
 	r := ctx.Request
 	params := ctx.Params
 	db := s.db
-
+	//w := ctx.Response
 	var id int
 	id, err := strconv.Atoi(params[0])
 	if err != nil {
@@ -410,19 +410,57 @@ func (s *Server) handleJobID(ctx *Context) {
 	}
 	log.Printf("%s /jobs/%s JobId: %d", r.Method, params[0], id)
 
+	//Checks if JobId exists
+	var jobExist int
+	row := db.Raw("select COUNT(*) from jobs where id = ?", id).Row()
+        row.Scan(&jobExist)
+	if jobExist == 0 {
+		ctx.Text(http.StatusBadRequest, "Job doesn't exists")
+		return
+	}
+
 	switch r.Method {
 	case "GET":
-		rows, err := db.Table("jobs").Where("Id = ?", id).Rows()
+		rows, err := db.Raw("select id, state, worker_id, result from tasks where job_id = ?", id).Rows()
 		if err != nil {
-			log.Fatal(err)
-		}
+			ctx.Error(http.StatusBadRequest, err)
+			return
+                }
+		defer rows.Close()
+		var taskId int
+		var workerId int
+		var state int
+		var result string
+		var taskState string
+		var workerName string
+		var workerAddress string
+		workerName = ""
+		workerAddress = ""
+
+		var reply common.JobDetailReply
+		var replyDetail common.WorkerTaskData
+		reply.JobId = id
+
 		for rows.Next() {
-			//var jobs Job
-			//rows.Scan(&jobs.Id, &jobs.JobName, &jobs.Params)
-			//			io.WriteString(w,"JobId: " + strconv.Itoa(job.Id) +" Name: "+string(job.JobName)+
-			//                                      " param:"+string(job.Params)+"\n")
+			rows.Scan(&taskId, &state, &workerId, &result)
+			//Getting worker name
+			if workerId != -1 {
+				row := db.Raw("select name, address from workers where id = ?", workerId).Row()
+				row.Scan(&workerName, &workerAddress)
+			}
+
+			//Need to use String() to get taskState
+			taskState = "Queued"
+			//Creating Reply Struct
+			replyDetail.TaskId = taskId
+			replyDetail.TaskState = taskState
+			replyDetail.WorkerId = workerId
+			replyDetail.WorkerName = workerName
+			replyDetail.WorkerAddress = workerAddress
+			replyDetail.Data = result
+			reply.Data = append(reply.Data,replyDetail)
 		}
-		//		rows, err := db.Table("tasks").Joins("inner join jobs on jobs.id = tasks.job_id").Rows()
+		ctx.Json(http.StatusOK, reply)
 		return
 	case "DELETE":
 		if success := db.Delete(&Job{Id: id}).Error == nil && db.Delete(Task{}, "job_id = ?", id).Error == nil; success {
