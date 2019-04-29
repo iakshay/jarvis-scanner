@@ -48,3 +48,42 @@ To start the frontend server
   # start server
   npm start
 ```
+
+## Examples
+
+IsAlive w/ IpBlock
+
+```json
+{
+	"Type": 0,
+	"Data": {
+		"IpBlock": "192.168.2.1/24"
+	}
+}
+```
+IsAlive w/ Ip
+
+```json
+{
+	"Type": 0,
+	"Data": {
+		"IpBlock": "192.168.2.1"
+	}
+}
+```
+
+PortScan
+
+```json
+{
+	"Type": 1,
+	"Data": {
+		"Type": 1,
+		"Ip": "127.0.0.1",
+		 "PortRange": {
+		 	"Start": 0,
+		 	"End": 65535
+		 }
+	}
+}
+```

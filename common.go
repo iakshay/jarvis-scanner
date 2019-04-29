@@ -15,7 +15,6 @@ type PortScanType int
 type PortStatus int
 type IpStatus int
 type TaskData interface{}
-type JobSubmitData interface{}
 
 const (
 	HeartbeatInterval time.Duration = time.Second
@@ -118,7 +117,7 @@ type IpResult struct {
 
 type PortRange struct {
 	Start uint16 `json:"Start"`
-	End   uint16  `json:"End"`
+	End   uint16 `json:"End"`
 }
 
 type PortResult struct {
@@ -177,11 +176,18 @@ type JobSubmitReply struct{}
 
 // list
 type JobListParam struct{}
+
+type JobSubmitData struct {
+	Type JobType
+	Data interface{}
+}
+
 type JobInfo struct {
 	JobId int
-	JobName  string // TaskType
-	Data  JobSubmitData
+	Type  string // JobType
+	Data  interface{}
 }
+
 type JobListReply struct {
 	Jobs []JobInfo
 }

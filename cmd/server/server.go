@@ -8,12 +8,12 @@ import (
 	common "github.com/iakshay/jarvis-scanner"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
-	"io"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"net/rpc"
+	"os"
 	"regexp"
 	"strconv"
 	"sync"
@@ -26,8 +26,9 @@ type Task struct {
 	Id          int
 	JobId       int
 	State       common.TaskState
-	Params      []byte // Allows for UnMarshalling to struct objects, as needed
+	Type        common.TaskType
 	WorkerId    int
+	Params      []byte // Allows for UnMarshalling to struct objects, as needed
 	Worker      Worker `gorm:"foreignkey:TaskId; association_foreignkey:Id"`
 	Result      string
 	CreatedAt   *time.Time
@@ -36,7 +37,7 @@ type Task struct {
 
 type Job struct {
 	Id     int
-	JobName string
+	Type   common.JobType
 	Params []byte
 	Tasks  []Task `gorm:"foreignkey:JobId;association_foreignkey:Id"`
 }
@@ -71,7 +72,7 @@ func (service *RpcService) RegisterWorker(args *common.RegisterWorkerArgs, reply
 	}
 
 	// insert entry in workers table
-	worker := &Worker{Name: args.Name, Address: args.Address}
+	worker := &Worker{Name: args.Name, Address: args.Address, TaskId: NotAllocatedWorkerId}
 	if err := service.db.Create(worker).Error; err != nil {
 		log.Printf("Error creating worker %s\n", args.Name)
 	}
@@ -103,93 +104,95 @@ func (service *RpcService) Heartbeat(args *common.HeartbeatArgs, reply *common.H
 	return nil
 }
 
-/*func (server *Server) startTask() {
+func (server *Server) startTask(workerId int, task Task, service *RpcService) {
 
-	for id, client := range server.connections {
-		fmt.Printf("sending task to worker id: %d \n", id)
-		args := &common.SendTaskArgs{TaskData: common.IsAliveParam{}, TaskType: common.IsAliveTask, TaskId: 1}
-		var reply common.SendTaskReply
-		client.Call("Worker.SendTask", args, reply)
-		break
+	fmt.Printf("sending task to worker id: %d \n", workerId)
+	client := service.connections[workerId]
+	var args common.SendTaskArgs
+	if task.Type == common.IsAliveTask {
+		var taskData common.IsAliveParam
+		if err := json.Unmarshal(task.Params, &taskData); err != nil {
+			log.Printf("Error while unmarshalling task data.\n")
+		}
+		args = common.SendTaskArgs{TaskData: taskData, TaskType: task.Type, TaskId: task.Id}
+	} else {
+		var taskData common.PortScanParam
+		if err := json.Unmarshal(task.Params, &taskData); err != nil {
+			log.Printf("Error while unmarshalling task data.\n")
+		}
+		args = common.SendTaskArgs{TaskData: taskData, TaskType: task.Type, TaskId: task.Id}
 	}
-}*/
 
-/*
-func (server *Server) Schedule() {
+	var reply common.SendTaskReply
+	client.Call("Worker.SendTask", &args, reply)
+}
+
+func (server *Server) Schedule(service *RpcService) {
 	db := server.db
-	connections := server.connections
 
 	for {
-		workerAvails := make(map[int]common.WorkerState)
-		var workers []Worker
-		db.Find(&workers)
-		numWorkers := 0
-		for worker := range workers {
-			workerAvails[worker.Id] = common.Undetermined
-			numWorkers += 1
+		var workerCount int
+		db.Table("workers").Count(&workerCount)
+		fmt.Printf("%d\n", workerCount)
+		var freeWorkers []Worker
+		if err := db.Table("workers").Where("task_id = ?", -1).Find(&freeWorkers); err != nil {
+			fmt.Printf("Error returning free workers.")
 		}
-		freeWorkers := make([Worker], numWorkers)
-		freeWorkerIndex := 0
 
-		queuedTasks, inProgressTasks, completeTasks := make([Task], 0, numWorkers), make([Task], 0, numWorkers), make([Task], 0, numWorkers)
-		queuedCount, inProgressCount, completeCount := 0, 0, 0
-		var tasks []Task
-		db.Find(&tasks)
-		for task := range tasks {
-			if task.State == common.Queued {
-				queuedTasks[queuedCount] = task
-				queuedCount += 1
-			} else if task.State == common.InProgress {
-				inProgressTasks[inProgressCount] = task
-				inProgressCount += 1
-			} else {
-				completeTasks[completeCount] = task
-				completeCount += 1
+		fmt.Printf("%d\n", len(freeWorkers))
+
+		availWorkers := make([]Worker, workerCount)
+		numAvailWorkers := 0
+		for _, worker := range freeWorkers {
+			updatedAt := *(worker.UpdatedAt)
+			if (time.Now().Sub(updatedAt)) <= common.HeartbeatInterval {
+				availWorkers[numAvailWorkers] = worker
+				numAvailWorkers += 1
 			}
 		}
 
-		for task := range completeTasks {
-			workerAvails[task.Worker.Id] = common.Available
-			freeWorkers[freeWorkerIndex] = task.Worker
-			freeWorkerIndex += 1
-		}
-
-		for task := range inProgressTasks {
-			workerAvails[task.Worker.Id] = common.Unavailable
-		}
-
-		for worker := range workerAvails {
-			if workerAvails[worker] == common.Undetermined {
-				freeWorkers[freeWorkerIndex]] = worker
-				freeWorkerIndex += 1
-			}
-		}
-
-		index := 0
+		var queuedTasks []Task
+		db.Order("created_at asc").Where("state = ?", common.Queued).Limit(numAvailWorkers).Find(&queuedTasks)
+		availIndex := 0
 
 		for i := 0; i < 2; i++ {
-			var arr []Task
+			var tasks []Task
 			if i == 0 {
-				arr = queuedTasks
-			} else {
-				arr = inProgressTasks
+				tasks = queuedTasks
+			} else if availIndex < numAvailWorkers {
+				var inProgressTasks []Task
+				db.Order("created_at asc").Where("state = ?", numAvailWorkers).Find(&inProgressTasks)
+				tasks = inProgressTasks
 			}
 
-			for (index < numWorkers) && (arr[index] != nil) && (freeWorkers[index] != nil) {
-				if (time.Now().Sub(freeWorkers[index].UpdatedAt).Seconds()) <= common.LifeCycle {
+			if tasks != nil {
+				for _, task := range tasks {
+					if availIndex == numAvailWorkers {
+						break
+					}
 
+					currWorker := Worker{}
+					currWorker.Id = -1 // To enable conditional below
+					if i == 1 {
+						currWorker = task.Worker
+					}
+
+					if currWorker.Id == -1 || (time.Now().Sub(*(currWorker.UpdatedAt)) > common.HeartbeatInterval) {
+						worker := availWorkers[availIndex]
+						db.Table("tasks").Where("id = ?", task.Id).Update("worker_id", worker.Id)
+						db.Table("tasks").Where("id = ?", task.Id).Update("worker", worker)
+						server.startTask(worker.Id, task, service)
+
+						availIndex += 1
+					}
 				}
-
-				index += 1
 			}
 		}
 
-		db.Where("updated_at <", Time.
-		time.Sleep(1.5 * time.Second)
+		time.Sleep(2 * time.Second)
 	}
 
 }
-*/
 
 // https://gist.github.com/reagent/043da4661d2984e9ecb1ccb5343bf438
 // From the example under, "Custom Regular Expression-Based Router"
@@ -254,7 +257,6 @@ func (c *Context) Error(code int, err error) {
 
 func (s *Server) handleJobs(ctx *Context) {
 	r := ctx.Request
-	w := ctx.Response
 	db := s.db
 
 	log.Printf("%s /jobs", r.Method)
@@ -267,25 +269,38 @@ func (s *Server) handleJobs(ctx *Context) {
 
 	var tasks []Task
 	switch r.Method {
-	//TODO: Just return each job's ID, params; for specific job's details, use its ID returned form this function
 	case "GET":
 		rows, err := db.Table("jobs").Rows()
 		if err != nil {
 			log.Fatal(err)
 		}
-		var Reply common.JobListReply
-		var ReplyDetail common.JobInfo
+		var reply common.JobListReply
+		var replyDetail common.JobInfo
 		for rows.Next() {
 			var job Job
-			rows.Scan(&job.Id, &job.JobName,&job.Params)
-			io.WriteString(w,"JobId: " + strconv.Itoa(job.Id) +" Name: "+string(job.JobName)+
-                                        " param:"+string(job.Params)+"\n")
-			ReplyDetail.JobId = job.Id
-			ReplyDetail.JobName = string(job.JobName)
-			ReplyDetail.Data = string(job.Params)
-			Reply.Jobs = append(Reply.Jobs,ReplyDetail)
+			rows.Scan(&job.Id, &job.Type, &job.Params)
+			replyDetail.JobId = job.Id
+			replyDetail.Type = job.Type.String()
+			if job.Type == common.IsAliveJob {
+				var isAliveParam common.JobIsAliveParam
+				err = json.Unmarshal([]byte(job.Params), &isAliveParam)
+				if err != nil {
+					log.Fatal(err)
+					return
+				}
+				replyDetail.Data = isAliveParam
+			} else if job.Type == common.PortScanJob {
+				var portScanParam common.JobPortScanParam
+				err = json.Unmarshal([]byte(job.Params), &portScanParam)
+				if err != nil {
+					log.Fatal(err)
+					return
+				}
+				replyDetail.Data = portScanParam
+			}
+			reply.Jobs = append(reply.Jobs, replyDetail)
 		}
-		ctx.Json(http.StatusOK, Reply)
+		ctx.Json(http.StatusOK, reply)
 		return
 	case "POST":
 		contentType := r.Header.Get("Content-type")
@@ -309,12 +324,14 @@ func (s *Server) handleJobs(ctx *Context) {
 		}
 
 		jobType := jobParams.Type
-		var Name string
 		var workerCount int
 		db.Table("workers").Count(&workerCount)
+
+		if workerCount == 0 {
+			workerCount = 1
+		}
 		log.Printf("JobType: %v WorkerCount:%d", jobType, workerCount)
 		if jobType == common.IsAliveJob {
-			Name = "IsAlive"
 			// unmarshalling interface
 			var isAliveParam common.JobIsAliveParam
 			err = json.Unmarshal([]byte(jobParams.Data), &isAliveParam)
@@ -340,7 +357,6 @@ func (s *Server) handleJobs(ctx *Context) {
 			}
 
 		} else if jobType == common.PortScanJob {
-			Name = "PortScan"
 			var portScanParam common.JobPortScanParam
 			err = json.Unmarshal([]byte(jobParams.Data), &portScanParam)
 			if err != nil {
@@ -367,12 +383,19 @@ func (s *Server) handleJobs(ctx *Context) {
 				tasks = append(tasks, Task{WorkerId: NotAllocatedWorkerId, State: common.Queued, Params: buf})
 			}
 		}
-		job := Job{JobName:Name, Params: b, Tasks: tasks}
+		job := Job{Type: jobType, Params: jobParams.Data, Tasks: tasks}
 		db.Create(&job)
 		ctx.Text(http.StatusOK, "Successfully submitted job")
 		return
 	}
 
+}
+
+func (s *Server) Setup() {
+	// update all inprogress tasks with workerId -1
+	if result := s.db.Model(&Task{}).Where("state = ?", common.InProgress).Update("worker_id", NotAllocatedWorkerId); result.Error != nil {
+		log.Fatalln(result.Error)
+	}
 }
 
 func (s *Server) handleJobID(ctx *Context) {
@@ -440,7 +463,12 @@ func (s *Server) handleJobID(ctx *Context) {
 		ctx.Json(http.StatusOK, reply)
 		return
 	case "DELETE":
-		io.WriteString(ctx.Response, "Delete\n")
+		if success := db.Delete(&Job{Id: id}).Error == nil && db.Delete(Task{}, "job_id = ?", id).Error == nil; success {
+			ctx.Text(http.StatusOK, "Deleted job successfully")
+		} else {
+			ctx.Text(http.StatusBadRequest, "Failed to delete job")
+		}
+
 		return
 	}
 }
@@ -449,12 +477,24 @@ func main() {
 	var serverAddr string
 	var rpcAddr string
 	var dbPath string
+	var clean bool
 	flag.StringVar(&serverAddr, "serverAddr", "localhost:8080", "address of http service")
 	flag.StringVar(&rpcAddr, "rpcAddr", "localhost:8081", "address of rpc service")
 	flag.StringVar(&dbPath, "db", "test.db", "database path")
+	flag.BoolVar(&clean, "clean", false, "cleans old database if it exists")
 	flag.Parse()
 	fmt.Println("starting server")
 	var wg sync.WaitGroup
+
+	// remove the old database
+	if clean {
+		err := os.Remove(dbPath)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	// setup database
 	db, err := gorm.Open("sqlite3", dbPath)
 	if err != nil {
@@ -470,10 +510,9 @@ func main() {
 
 	server := new(Server)
 	server.db = db
-	//db.Exec(".schema tasks")
-	//db.Exec("DROP TABLE jobs;")
-	//db.Exec("DROP TABLE tasks;")
-	//Star custom Mux, for dynamic routing from client-server interactions
+
+	// star custom Mux, for dynamic routing from client-server interactions
+	server.Setup()
 	server.Handle("/jobs/([0-9]+)$", func(ctx *Context) {
 		server.handleJobID(ctx)
 	})
@@ -498,9 +537,8 @@ func main() {
 	}
 	wg.Add(1)
 	go http.Serve(l, nil)
-
 	// start thread for Scheduler aspect of Server
-	//	go server.Schedule()
+	go server.Schedule(service)
 
 	wg.Wait()
 }
