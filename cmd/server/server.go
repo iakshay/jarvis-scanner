@@ -159,7 +159,7 @@ func (server *Server) Schedule(service *RpcService) {
 			}
 		}
 
-		fmt.Printf("active workers: %d\n", len(availWorkers))
+	//	fmt.Printf("active workers: %d\n", len(availWorkers))
 
 		var queuedTasks []Task
 		db.Order("created_at asc").Where("state = ?", common.Queued).Limit(numAvailWorkers).Find(&queuedTasks)
@@ -191,7 +191,9 @@ func (server *Server) Schedule(service *RpcService) {
 					if currWorker.Id == -1 || (time.Now().Sub(*(currWorker.UpdatedAt)) > common.HeartbeatInterval) {
 						worker := availWorkers[availIndex]
 						db.Table("tasks").Where("id = ?", task.Id).Update("worker_id", worker.Id)
-						//db.Table("tasks").Where("id = ?", task.Id).Update("worker", worker)
+						if currWorker == -1 {
+							db.Table("tasks").Where("id= ?", task.Id).Update("status", common.InProgress)
+						}
 						log.Println("starting task for worker")
 						server.startTask(worker.Id, task, service)
 
@@ -203,7 +205,6 @@ func (server *Server) Schedule(service *RpcService) {
 
 		time.Sleep(10 * time.Second)
 	}
-
 }
 
 // https://gist.github.com/reagent/043da4661d2984e9ecb1ccb5343bf438
