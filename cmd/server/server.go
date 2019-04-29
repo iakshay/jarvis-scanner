@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/gob"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -111,20 +112,25 @@ func (server *Server) startTask(workerId int, task Task, service *RpcService) {
 	var args common.SendTaskArgs
 	if task.Type == common.IsAliveTask {
 		var taskData common.IsAliveParam
+		gob.Register(common.IsAliveParam{})
 		if err := json.Unmarshal(task.Params, &taskData); err != nil {
 			log.Printf("Error while unmarshalling task data.\n")
 		}
 		args = common.SendTaskArgs{TaskData: taskData, TaskType: task.Type, TaskId: task.Id}
 	} else {
 		var taskData common.PortScanParam
+		gob.Register(common.PortScanParam{})
 		if err := json.Unmarshal(task.Params, &taskData); err != nil {
 			log.Printf("Error while unmarshalling task data.\n")
 		}
 		args = common.SendTaskArgs{TaskData: taskData, TaskType: task.Type, TaskId: task.Id}
 	}
-
+	//args.TaskData, _ = args.TaskData.(common.TaskData)
+	log.Printf("%s %T", args, args)
 	var reply common.SendTaskReply
-	client.Call("Worker.SendTask", &args, reply)
+	if err := client.Call("Worker.SendTask", &args, reply); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func (server *Server) Schedule(service *RpcService) {
@@ -491,6 +497,7 @@ func main() {
 	fmt.Println("starting server")
 	var wg sync.WaitGroup
 
+	//gob.Register(IsAliveParam{})
 	// remove the old database
 	if clean {
 		err := os.Remove(dbPath)

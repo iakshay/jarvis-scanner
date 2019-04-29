@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/gob"
 	"flag"
 	"fmt"
 	"github.com/google/gopacket/routing"
@@ -83,6 +84,8 @@ func (worker *Worker) runHearbeat() {
 }
 
 func main() {
+	gob.Register(common.IsAliveParam{})
+	gob.Register(common.PortScanParam{})
 	var serverAddr string
 	var workerAddr string
 	flag.StringVar(&serverAddr, "serverAddr", "localhost:8081", "address of the server")
