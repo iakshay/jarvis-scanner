@@ -192,8 +192,11 @@ type JobDetailParam struct {
 }
 
 type WorkerTaskData struct {
+	TaskId int
+	TaskState string
 	WorkerId   int
 	WorkerName string
+	WorkerAddress string
 	Data       TaskData
 }
 
