@@ -28,7 +28,7 @@ type Task struct {
 	State       common.TaskState
 	Type        common.TaskType
 	WorkerId    int
-	Params      []byte // Allows for UnMarshalling to struct objects, as needed
+	Params      []byte // Allows for Unmarshalling to struct objects, as needed
 	Worker      Worker `gorm:"foreignkey:TaskId; association_foreignkey:Id"`
 	Result      string
 	CreatedAt   *time.Time
@@ -180,7 +180,7 @@ func (server *Server) Schedule(service *RpcService) {
 					if currWorker.Id == -1 || (time.Now().Sub(*(currWorker.UpdatedAt)) > common.HeartbeatInterval) {
 						worker := availWorkers[availIndex]
 						db.Table("tasks").Where("id = ?", task.Id).Update("worker_id", worker.Id)
-						db.Table("tasks").Where("id = ?", task.Id).Update("worker", worker)
+						//db.Table("tasks").Where("id = ?", task.Id).Update("worker", worker)
 						server.startTask(worker.Id, task, service)
 
 						availIndex += 1
@@ -189,7 +189,7 @@ func (server *Server) Schedule(service *RpcService) {
 			}
 		}
 
-		time.Sleep(2 * time.Second)
+		time.Sleep(10 * time.Second)
 	}
 
 }
