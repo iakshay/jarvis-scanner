@@ -19,15 +19,20 @@ func SubnetSplit(ipBlock string, count int) ([]IpRange, error) {
 	a, b := ipnet.Mask.Size()
 	blockSize := (1 << uint(b-a)) / count
 	i := 0
+	//log.Println(blockSize)
 	var start net.IP
 	for ip := ip.Mask(ipnet.Mask); ipnet.Contains(ip); inc(ip) {
+		//log.Println(i, ip)
 		if i == 0 {
 			start = make(net.IP, len(ip))
 			copy(start, ip)
 		}
 		if i == blockSize-1 {
 			i = 0
-			results = append(results, IpRange{start, ip})
+			end := make(net.IP, len(ip))
+			copy(end, ip)
+			results = append(results, IpRange{start, end})
+			//log.Println(results)
 			continue
 		}
 		i++

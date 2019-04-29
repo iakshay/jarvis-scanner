@@ -15,6 +15,13 @@ func TestSubnetSplit(t *testing.T) {
 	assert.Equal(t, results[3].Start.To4(), net.ParseIP("192.168.2.192").To4())
 }
 
+func TestSubnetSplitSingle(t *testing.T) {
+	results, _ := SubnetSplit("10.0.0.10/24", 1)
+	assert.Equal(t, len(results), 1)
+	assert.Equal(t, results[0].Start.To4(), net.ParseIP("10.0.0.0").To4())
+	assert.Equal(t, results[0].End.To4(), net.ParseIP("10.0.0.255").To4())
+}
+
 func TestIpSplit(t *testing.T) {
 	results, _ := SubnetSplit("192.168.2.1", 4)
 	assert.Equal(t, len(results), 1)
