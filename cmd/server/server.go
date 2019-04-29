@@ -410,10 +410,10 @@ func (s *Server) handleJobID(ctx *Context) {
 		//		rows, err := db.Table("tasks").Joins("inner join jobs on jobs.id = tasks.job_id").Rows()
 		return
 	case "DELETE":
-		if db.Delete(&Job{}, "id = ?", id).Error != nil {
-			ctx.Text(http.StatusBadRequest, "Failed to delete job")
+		if success := db.Delete(&Job{Id: id}).Error == nil && db.Delete(Task{}, "job_id = ?", id).Error == nil; success {
+			ctx.Text(http.StatusOK, "Deleted job successfully")
 		} else {
-			ctx.Text(http.StatusOK, "Failed to delete job")
+			ctx.Text(http.StatusBadRequest, "Failed to delete job")
 		}
 
 		return
