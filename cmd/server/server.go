@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
+	"os"
 	"regexp"
 	"strconv"
 	"sync"
@@ -442,7 +443,7 @@ func main() {
 	flag.StringVar(&serverAddr, "serverAddr", "localhost:8080", "address of http service")
 	flag.StringVar(&rpcAddr, "rpcAddr", "localhost:8081", "address of rpc service")
 	flag.StringVar(&dbPath, "db", "test.db", "database path")
-	flag.BoolVar(&dbPath, "clean", false, "cleans old database if it exists")
+	flag.BoolVar(&clean, "clean", false, "cleans old database if it exists")
 	flag.Parse()
 	fmt.Println("starting server")
 	var wg sync.WaitGroup
