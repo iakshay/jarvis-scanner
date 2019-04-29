@@ -438,12 +438,24 @@ func main() {
 	var serverAddr string
 	var rpcAddr string
 	var dbPath string
+	var clean bool
 	flag.StringVar(&serverAddr, "serverAddr", "localhost:8080", "address of http service")
 	flag.StringVar(&rpcAddr, "rpcAddr", "localhost:8081", "address of rpc service")
 	flag.StringVar(&dbPath, "db", "test.db", "database path")
+	flag.BoolVar(&dbPath, "clean", false, "cleans old database if it exists")
 	flag.Parse()
 	fmt.Println("starting server")
 	var wg sync.WaitGroup
+
+	// remove the old database
+	if clean {
+		err := os.Remove(dbPath)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	// setup database
 	db, err := gorm.Open("sqlite3", dbPath)
 	if err != nil {
