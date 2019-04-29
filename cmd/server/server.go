@@ -8,7 +8,6 @@ import (
 	common "github.com/iakshay/jarvis-scanner"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
-	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -37,7 +36,7 @@ type Task struct {
 
 type Job struct {
 	Id     int
-	JobName string
+	Type   common.JobType
 	Params []byte
 	Tasks  []Task `gorm:"foreignkey:JobId;association_foreignkey:Id"`
 }
@@ -257,7 +256,6 @@ func (c *Context) Error(code int, err error) {
 
 func (s *Server) handleJobs(ctx *Context) {
 	r := ctx.Request
-	w := ctx.Response
 	db := s.db
 
 	log.Printf("%s /jobs", r.Method)
@@ -270,25 +268,38 @@ func (s *Server) handleJobs(ctx *Context) {
 
 	var tasks []Task
 	switch r.Method {
-	//TODO: Just return each job's ID, params; for specific job's details, use its ID returned form this function
 	case "GET":
 		rows, err := db.Table("jobs").Rows()
 		if err != nil {
 			log.Fatal(err)
 		}
-		var Reply common.JobListReply
-		var ReplyDetail common.JobInfo
+		var reply common.JobListReply
+		var replyDetail common.JobInfo
 		for rows.Next() {
 			var job Job
-			rows.Scan(&job.Id, &job.JobName,&job.Params)
-			io.WriteString(w,"JobId: " + strconv.Itoa(job.Id) +" Name: "+string(job.JobName)+
-                                        " param:"+string(job.Params)+"\n")
-			ReplyDetail.JobId = job.Id
-			ReplyDetail.JobName = string(job.JobName)
-			ReplyDetail.Data = string(job.Params)
-			Reply.Jobs = append(Reply.Jobs,ReplyDetail)
+			rows.Scan(&job.Id, &job.Type, &job.Params)
+			replyDetail.JobId = job.Id
+			replyDetail.Type = job.Type.String()
+			if job.Type == common.IsAliveJob {
+				var isAliveParam common.JobIsAliveParam
+				err = json.Unmarshal([]byte(job.Params), &isAliveParam)
+				if err != nil {
+					log.Fatal(err)
+					return
+				}
+				replyDetail.Data = isAliveParam
+			} else if job.Type == common.PortScanJob {
+				var portScanParam common.JobPortScanParam
+				err = json.Unmarshal([]byte(job.Params), &portScanParam)
+				if err != nil {
+					log.Fatal(err)
+					return
+				}
+				replyDetail.Data = portScanParam
+			}
+			reply.Jobs = append(reply.Jobs, replyDetail)
 		}
-		ctx.Json(http.StatusOK, Reply)
+		ctx.Json(http.StatusOK, reply)
 		return
 	case "POST":
 		contentType := r.Header.Get("Content-type")
@@ -312,12 +323,10 @@ func (s *Server) handleJobs(ctx *Context) {
 		}
 
 		jobType := jobParams.Type
-		var Name string
 		var workerCount int
 		db.Table("workers").Count(&workerCount)
 		log.Printf("JobType: %v WorkerCount:%d", jobType, workerCount)
 		if jobType == common.IsAliveJob {
-			Name = "IsAlive"
 			// unmarshalling interface
 			var isAliveParam common.JobIsAliveParam
 			err = json.Unmarshal([]byte(jobParams.Data), &isAliveParam)
@@ -343,7 +352,6 @@ func (s *Server) handleJobs(ctx *Context) {
 			}
 
 		} else if jobType == common.PortScanJob {
-			Name = "PortScan"
 			var portScanParam common.JobPortScanParam
 			err = json.Unmarshal([]byte(jobParams.Data), &portScanParam)
 			if err != nil {
@@ -370,7 +378,7 @@ func (s *Server) handleJobs(ctx *Context) {
 				tasks = append(tasks, Task{State: common.Queued, Params: buf})
 			}
 		}
-		job := Job{JobName:Name, Params: b, Tasks: tasks}
+		job := Job{Type: jobType, Params: jobParams.Data, Tasks: tasks}
 		db.Create(&job)
 		ctx.Text(http.StatusOK, "Successfully submitted job")
 		return
@@ -397,15 +405,20 @@ func (s *Server) handleJobID(ctx *Context) {
 			log.Fatal(err)
 		}
 		for rows.Next() {
-			var jobs Job
-			rows.Scan(&jobs.Id, &jobs.JobName, &jobs.Params)
-//			io.WriteString(w,"JobId: " + strconv.Itoa(job.Id) +" Name: "+string(job.JobName)+
-  //                                      " param:"+string(job.Params)+"\n")
+			//var jobs Job
+			//rows.Scan(&jobs.Id, &jobs.JobName, &jobs.Params)
+			//			io.WriteString(w,"JobId: " + strconv.Itoa(job.Id) +" Name: "+string(job.JobName)+
+			//                                      " param:"+string(job.Params)+"\n")
 		}
-//		rows, err := db.Table("tasks").Joins("inner join jobs on jobs.id = tasks.job_id").Rows()
+		//		rows, err := db.Table("tasks").Joins("inner join jobs on jobs.id = tasks.job_id").Rows()
 		return
 	case "DELETE":
-		io.WriteString(ctx.Response, "Delete\n")
+		if success := db.Delete(&Job{Id: id}).Error == nil && db.Delete(Task{}, "job_id = ?", id).Error == nil; success {
+			ctx.Text(http.StatusOK, "Deleted job successfully")
+		} else {
+			ctx.Text(http.StatusBadRequest, "Failed to delete job")
+		}
+
 		return
 	}
 }
