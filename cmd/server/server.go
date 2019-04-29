@@ -31,7 +31,7 @@ type Task struct {
 	WorkerId    int
 	Params      []byte // Allows for Unmarshalling to struct objects, as needed
 	Worker      Worker `gorm:"foreignkey:TaskId; association_foreignkey:Id"`
-	Result      string
+	Result      []byte
 	CreatedAt   *time.Time
 	CompletedAt *time.Time
 }
@@ -86,11 +86,15 @@ func (service *RpcService) RegisterWorker(args *common.RegisterWorkerArgs, reply
 }
 
 func (service *RpcService) CompleteTask(args *common.CompleteTaskArgs, reply *common.CompleteTaskReply) error {
-	fmt.Println("Complete task", args)
+	log.Println("Complete task received")
+	buf, err := json.Marshal(args.Result)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// insert entry in reports table
-	if err := service.db.Table("tasks").Where("Id = ?", args.TaskId).Update("result", args.Result).Error; err != nil {
-		log.Printf("Error adding resort for TaskId %d\n", args.TaskId)
+	if err := service.db.Table("tasks").Where("Id = ?", args.TaskId).Updates(Task{State: common.Complete, Result: buf}).Error; err != nil {
+		log.Printf("Error adding resort for TaskId %s %d\n", err, args.TaskId)
 	}
 	return nil
 }
@@ -112,23 +116,20 @@ func (server *Server) startTask(workerId int, task Task, service *RpcService) {
 	var args common.SendTaskArgs
 	if task.Type == common.IsAliveTask {
 		var taskData common.IsAliveParam
-		gob.Register(common.IsAliveParam{})
 		if err := json.Unmarshal(task.Params, &taskData); err != nil {
 			log.Printf("Error while unmarshalling task data.\n")
 		}
 		args = common.SendTaskArgs{TaskData: taskData, TaskType: task.Type, TaskId: task.Id}
 	} else {
 		var taskData common.PortScanParam
-		gob.Register(common.PortScanParam{})
 		if err := json.Unmarshal(task.Params, &taskData); err != nil {
 			log.Printf("Error while unmarshalling task data.\n")
 		}
 		args = common.SendTaskArgs{TaskData: taskData, TaskType: task.Type, TaskId: task.Id}
 	}
-	//args.TaskData, _ = args.TaskData.(common.TaskData)
 	log.Printf("%s %T", args, args)
 	var reply common.SendTaskReply
-	if err := client.Call("Worker.SendTask", &args, reply); err != nil {
+	if err := client.Call("Worker.SendTask", &args, &reply); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -286,6 +287,9 @@ func (s *Server) handleJobs(ctx *Context) {
 			log.Fatal(err)
 		}
 		var reply common.JobListReply
+
+		// create zero length slice, so we don't return null
+		reply.Jobs = make([]common.JobInfo, 0)
 		var replyDetail common.JobInfo
 		for rows.Next() {
 			var job Job
@@ -297,7 +301,6 @@ func (s *Server) handleJobs(ctx *Context) {
 				err = json.Unmarshal([]byte(job.Params), &isAliveParam)
 				if err != nil {
 					log.Fatal(err)
-					return
 				}
 				replyDetail.Data = isAliveParam
 			} else if job.Type == common.PortScanJob {
@@ -305,7 +308,6 @@ func (s *Server) handleJobs(ctx *Context) {
 				err = json.Unmarshal([]byte(job.Params), &portScanParam)
 				if err != nil {
 					log.Fatal(err)
-					return
 				}
 				replyDetail.Data = portScanParam
 			}
@@ -432,7 +434,7 @@ func (s *Server) handleJobID(ctx *Context) {
 
 	switch r.Method {
 	case "GET":
-		rows, err := db.Raw("select id, state, worker_id, result from tasks where job_id = ?", id).Rows()
+		rows, err := db.Raw("select id, type, state, worker_id, result from tasks where job_id = ?", id).Rows()
 		if err != nil {
 			ctx.Error(http.StatusBadRequest, err)
 			return
@@ -440,9 +442,9 @@ func (s *Server) handleJobID(ctx *Context) {
 		defer rows.Close()
 		var taskId int
 		var workerId int
-		var state int
 		var result string
-		var taskState string
+		var taskType common.TaskType
+		var taskState common.TaskState
 		var workerName string
 		var workerAddress string
 		workerName = ""
@@ -453,22 +455,37 @@ func (s *Server) handleJobID(ctx *Context) {
 		reply.JobId = id
 
 		for rows.Next() {
-			rows.Scan(&taskId, &state, &workerId, &result)
+			rows.Scan(&taskId, &taskType, &taskState, &workerId, &result)
 			//Getting worker name
 			if workerId != -1 {
 				row := db.Raw("select name, address from workers where id = ?", workerId).Row()
 				row.Scan(&workerName, &workerAddress)
 			}
 
-			//Need to use String() to get taskState
-			taskState = "Queued"
 			//Creating Reply Struct
 			replyDetail.TaskId = taskId
-			replyDetail.TaskState = taskState
+			replyDetail.TaskState = taskState.String()
 			replyDetail.WorkerId = workerId
 			replyDetail.WorkerName = workerName
 			replyDetail.WorkerAddress = workerAddress
-			replyDetail.Data = result
+			replyDetail.Data = struct{}{}
+			if taskState == common.Complete {
+				if taskType == common.IsAliveTask {
+					var isAliveResult common.IsAliveResult
+					err = json.Unmarshal([]byte(result), &isAliveResult)
+					if err != nil {
+						log.Fatal(err)
+					}
+					replyDetail.Data = isAliveResult
+				} else if taskType == common.PortScanTask {
+					var portScanResult common.PortScanResult
+					err = json.Unmarshal([]byte(result), &portScanResult)
+					if err != nil {
+						log.Fatal(err)
+					}
+					replyDetail.Data = portScanResult
+				}
+			}
 			reply.Data = append(reply.Data, replyDetail)
 		}
 		ctx.Json(http.StatusOK, reply)
@@ -506,6 +523,10 @@ func main() {
 			log.Fatal(err)
 		}
 	}
+	gob.Register(common.IsAliveParam{})
+	gob.Register(common.IsAliveResult{})
+	gob.Register(common.PortScanParam{})
+	gob.Register(common.PortScanResult{})
 
 	// setup database
 	db, err := gorm.Open("sqlite3", dbPath)

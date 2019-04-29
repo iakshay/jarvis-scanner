@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/gob"
 	"flag"
-	"fmt"
 	"github.com/google/gopacket/routing"
 	common "github.com/iakshay/jarvis-scanner"
 	"log"
@@ -22,7 +21,7 @@ type Worker struct {
 }
 
 func (worker *Worker) doTask() {
-	fmt.Println("Doing Task")
+	log.Println("Doing Task")
 	args := &common.CompleteTaskArgs{}
 	var reply common.CompleteTaskReply
 
@@ -32,7 +31,7 @@ func (worker *Worker) doTask() {
 		if !ok {
 			log.Fatal("Invalid param data")
 		}
-
+		log.Println(isAliveParam)
 		args.Result = common.IsAlive(isAliveParam.IpRange)
 	case common.PortScanTask:
 		portScanParam, ok := worker.TaskData.(common.PortScanParam)
@@ -57,8 +56,19 @@ func (worker *Worker) doTask() {
 	default:
 		log.Fatal("Invalid task type")
 	}
+	args.TaskId = worker.TaskId
+	//log.Printf("%v %T", args.Result, args.Result)
+	// reset worker state
+	worker.resetState()
+	if err := worker.Client.Call("Server.CompleteTask", args, &reply); err != nil {
+		log.Fatal(err)
+	}
 
-	worker.Client.Call("Server.CompleteTask", args, &reply)
+	log.Println("completed task")
+}
+
+func (worker *Worker) resetState() {
+	worker.TaskId = -1
 }
 
 func (worker *Worker) SendTask(args *common.SendTaskArgs, reply *common.SendTaskReply) error {
@@ -85,7 +95,9 @@ func (worker *Worker) runHearbeat() {
 
 func main() {
 	gob.Register(common.IsAliveParam{})
+	gob.Register(common.IsAliveResult{})
 	gob.Register(common.PortScanParam{})
+	gob.Register(common.PortScanResult{})
 	var serverAddr string
 	var workerAddr string
 	flag.StringVar(&serverAddr, "serverAddr", "localhost:8081", "address of the server")
@@ -106,7 +118,7 @@ func main() {
 	worker.TaskId = -1
 
 	// open upto requests from server
-	fmt.Println("Starting worker")
+	log.Println("Starting worker")
 	rpc.Register(worker)
 	rpc.HandleHTTP()
 	l, e := net.Listen("tcp", workerAddr)

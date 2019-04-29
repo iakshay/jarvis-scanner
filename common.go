@@ -122,7 +122,7 @@ type PortRange struct {
 
 type PortResult struct {
 	Status PortStatus
-	Banner string
+	Banner string `json:"Banner,omitempty"`
 }
 
 //
@@ -198,12 +198,12 @@ type JobDetailParam struct {
 }
 
 type WorkerTaskData struct {
-	TaskId int
-	TaskState string
-	WorkerId   int
-	WorkerName string
+	TaskId        int
+	TaskState     string
+	WorkerId      int
+	WorkerName    string
 	WorkerAddress string
-	Data       TaskData
+	Data          TaskData
 }
 
 type JobDetailReply struct {
