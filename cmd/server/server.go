@@ -383,6 +383,13 @@ func (s *Server) handleJobs(ctx *Context) {
 
 }
 
+func (s *Server) Setup() {
+	// update all inprogress tasks with workerId -1
+	if result := s.db.Model(&Task{}).Where("state = ?", common.InProgress).Update("worker_id", NotAllocatedWorkerId); result.Error != nil {
+		log.Fatalln(result.Error)
+	}
+}
+
 func (s *Server) handleJobID(ctx *Context) {
 	r := ctx.Request
 	params := ctx.Params
@@ -446,9 +453,8 @@ func main() {
 	server := new(Server)
 	server.db = db
 
-	//db.Exec("DROP TABLE jobs;")
-	//db.Exec("DROP TABLE tasks;")
-	//Star custom Mux, for dynamic routing from client-server interactions
+	// star custom Mux, for dynamic routing from client-server interactions
+	server.Setup()
 	server.Handle("/jobs/([0-9]+)$", func(ctx *Context) {
 		server.handleJobID(ctx)
 	})

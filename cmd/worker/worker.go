@@ -20,7 +20,7 @@ type Worker struct {
 	common.SendTaskArgs
 }
 
-func (worker *Worker) DoTask() {
+func (worker *Worker) doTask() {
 	fmt.Println("Doing Task")
 	args := &common.CompleteTaskArgs{}
 	var reply common.CompleteTaskReply
@@ -67,12 +67,12 @@ func (worker *Worker) SendTask(args *common.SendTaskArgs, reply *common.SendTask
 
 	worker.TaskData = args.TaskData
 	worker.TaskId = args.TaskId
-	go worker.DoTask()
+	go worker.doTask()
 
 	return nil
 }
 
-func (worker *Worker) RunHearbeat() {
+func (worker *Worker) runHearbeat() {
 	args := &common.HeartbeatArgs{WorkerId: worker.Id}
 	var reply common.HeartbeatReply
 	for {
@@ -122,7 +122,7 @@ func main() {
 	worker.Id = reply.WorkerId
 
 	// heartbeat go routine
-	go worker.RunHearbeat()
+	go worker.runHearbeat()
 
 	wg.Wait()
 }
