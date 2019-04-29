@@ -133,27 +133,31 @@ func (server *Server) Schedule(service *RpcService) {
 	for {
 		var workerCount int
 		db.Table("workers").Count(&workerCount)
-		fmt.Printf("%d\n", workerCount)
+		fmt.Printf("total workers: %d\n", workerCount)
 		var freeWorkers []Worker
-		if err := db.Table("workers").Where("task_id = ?", -1).Find(&freeWorkers); err != nil {
+		if result := db.Table("workers").Where("task_id = ?", -1).Find(&freeWorkers); result.Error != nil {
 			fmt.Printf("Error returning free workers.")
 		}
 
-		fmt.Printf("%d\n", len(freeWorkers))
+		fmt.Printf("free workers: %d\n", len(freeWorkers))
 
-		availWorkers := make([]Worker, workerCount)
+		// get active workers
+		var availWorkers []Worker
 		numAvailWorkers := 0
 		for _, worker := range freeWorkers {
 			updatedAt := *(worker.UpdatedAt)
 			if (time.Now().Sub(updatedAt)) <= common.HeartbeatInterval {
-				availWorkers[numAvailWorkers] = worker
+				availWorkers = append(availWorkers, worker)
 				numAvailWorkers += 1
 			}
 		}
 
+		fmt.Printf("active workers: %d\n", len(availWorkers))
+
 		var queuedTasks []Task
 		db.Order("created_at asc").Where("state = ?", common.Queued).Limit(numAvailWorkers).Find(&queuedTasks)
 		availIndex := 0
+		fmt.Printf("queued tasks: %d\n", len(queuedTasks))
 
 		for i := 0; i < 2; i++ {
 			var tasks []Task
@@ -181,6 +185,7 @@ func (server *Server) Schedule(service *RpcService) {
 						worker := availWorkers[availIndex]
 						db.Table("tasks").Where("id = ?", task.Id).Update("worker_id", worker.Id)
 						//db.Table("tasks").Where("id = ?", task.Id).Update("worker", worker)
+						log.Println("starting task for worker")
 						server.startTask(worker.Id, task, service)
 
 						availIndex += 1
@@ -353,7 +358,7 @@ func (s *Server) handleJobs(ctx *Context) {
 					return
 				}
 
-				tasks = append(tasks, Task{WorkerId: NotAllocatedWorkerId, State: common.Queued, Params: buf})
+				tasks = append(tasks, Task{Type: common.IsAliveTask, WorkerId: NotAllocatedWorkerId, State: common.Queued, Params: buf})
 			}
 
 		} else if jobType == common.PortScanJob {
@@ -380,7 +385,7 @@ func (s *Server) handleJobs(ctx *Context) {
 					log.Fatal(e)
 				}
 
-				tasks = append(tasks, Task{WorkerId: NotAllocatedWorkerId, State: common.Queued, Params: buf})
+				tasks = append(tasks, Task{Type: common.PortScanTask, WorkerId: NotAllocatedWorkerId, State: common.Queued, Params: buf})
 			}
 		}
 		job := Job{Type: jobType, Params: jobParams.Data, Tasks: tasks}
@@ -413,7 +418,7 @@ func (s *Server) handleJobID(ctx *Context) {
 	//Checks if JobId exists
 	var jobExist int
 	row := db.Raw("select COUNT(*) from jobs where id = ?", id).Row()
-        row.Scan(&jobExist)
+	row.Scan(&jobExist)
 	if jobExist == 0 {
 		ctx.Text(http.StatusBadRequest, "Job doesn't exists")
 		return
@@ -425,7 +430,7 @@ func (s *Server) handleJobID(ctx *Context) {
 		if err != nil {
 			ctx.Error(http.StatusBadRequest, err)
 			return
-                }
+		}
 		defer rows.Close()
 		var taskId int
 		var workerId int
@@ -458,7 +463,7 @@ func (s *Server) handleJobID(ctx *Context) {
 			replyDetail.WorkerName = workerName
 			replyDetail.WorkerAddress = workerAddress
 			replyDetail.Data = result
-			reply.Data = append(reply.Data,replyDetail)
+			reply.Data = append(reply.Data, replyDetail)
 		}
 		ctx.Json(http.StatusOK, reply)
 		return
