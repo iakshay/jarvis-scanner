@@ -67,6 +67,7 @@ func (worker *Worker) SendTask(args *common.SendTaskArgs, reply *common.SendTask
 
 	worker.TaskData = args.TaskData
 	worker.TaskId = args.TaskId
+	worker.TaskType = args.TaskType
 	go worker.DoTask()
 
 	return nil
