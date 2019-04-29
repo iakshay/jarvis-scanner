@@ -25,14 +25,14 @@ type Task struct {
 	Id          int
 	JobId       int
 	State       common.TaskState
-	Type	    common.TaskType
-	Params      []byte	// Allows for UnMarshalling to struct objects, as needed
+	Type        common.TaskType
+	WorkerId    int
+	Params      []byte // Allows for UnMarshalling to struct objects, as needed
 	Worker      Worker `gorm:"foreignkey:TaskId; association_foreignkey:Id"`
 	Result      string
 	CreatedAt   *time.Time
 	CompletedAt *time.Time
 }
-
 
 type Job struct {
 	Id     int
@@ -171,12 +171,12 @@ func (server *Server) Schedule(service *RpcService) {
 					}
 
 					currWorker := Worker{}
-					currWorker.Id = -1	// To enable conditional below
+					currWorker.Id = -1 // To enable conditional below
 					if i == 1 {
 						currWorker = task.Worker
 					}
 
-					if currWorker.Id == -1 || (time.Now().Sub(*(currWorker.UpdatedAt)) > common.HeartbeatInterval){
+					if currWorker.Id == -1 || (time.Now().Sub(*(currWorker.UpdatedAt)) > common.HeartbeatInterval) {
 						worker := availWorkers[availIndex]
 						db.Table("tasks").Where("id = ?", task.Id).Update("worker_id", worker.Id)
 						db.Table("tasks").Where("id = ?", task.Id).Update("worker", worker)
@@ -325,6 +325,10 @@ func (s *Server) handleJobs(ctx *Context) {
 		jobType := jobParams.Type
 		var workerCount int
 		db.Table("workers").Count(&workerCount)
+
+		if workerCount == 0 {
+			workerCount = 1
+		}
 		log.Printf("JobType: %v WorkerCount:%d", jobType, workerCount)
 		if jobType == common.IsAliveJob {
 			// unmarshalling interface
@@ -348,7 +352,7 @@ func (s *Server) handleJobs(ctx *Context) {
 					return
 				}
 
-				tasks = append(tasks, Task{State: common.Queued, Params: buf})
+				tasks = append(tasks, Task{WorkerId: NotAllocatedWorkerId, State: common.Queued, Params: buf})
 			}
 
 		} else if jobType == common.PortScanJob {
@@ -375,7 +379,7 @@ func (s *Server) handleJobs(ctx *Context) {
 					log.Fatal(e)
 				}
 
-				tasks = append(tasks, Task{State: common.Queued, Params: buf})
+				tasks = append(tasks, Task{WorkerId: NotAllocatedWorkerId, State: common.Queued, Params: buf})
 			}
 		}
 		job := Job{Type: jobType, Params: jobParams.Data, Tasks: tasks}
@@ -482,10 +486,8 @@ func main() {
 	}
 	wg.Add(1)
 	go http.Serve(l, nil)
-	go server.Schedule(service)
-
 	// start thread for Scheduler aspect of Server
-	//	go server.Schedule()
+	go server.Schedule(service)
 
 	wg.Wait()
 }
