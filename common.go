@@ -209,8 +209,7 @@ type WorkerTaskData struct {
 }
 
 type JobDetailReply struct {
-	JobId int
-	Type  JobType
+	JobInfo JobInfo
 	Data  []WorkerTaskData
 }
 

@@ -443,6 +443,33 @@ func (s *Server) handleJobID(ctx *Context) {
 
 	switch r.Method {
 	case "GET":
+		var reply common.JobDetailReply
+		var replyDetail common.WorkerTaskData
+		var jobType common.JobType
+		var params string
+
+		/*Getting Job information*/
+		row := db.Raw("select type, params from jobs where id = ?", id).Row()
+		row.Scan(&jobType, &params)
+
+		reply.JobInfo.JobId = id
+		reply.JobInfo.Type = jobType
+		if jobType == common.IsAliveJob {
+			var isAliveParam common.JobIsAliveParam
+			err = json.Unmarshal([]byte(params), &isAliveParam)
+			if err != nil {
+				ctx.Error(http.StatusBadRequest, err)
+			}
+			reply.JobInfo.Data = isAliveParam
+		} else if jobType == common.PortScanJob {
+			var portScanParam common.JobPortScanParam
+			err = json.Unmarshal([]byte(params), &portScanParam)
+			if err != nil {
+				ctx.Error(http.StatusBadRequest, err)
+			}
+			reply.JobInfo.Data = portScanParam
+		}
+		/*Getting tasks*/
 		rows, err := db.Raw("select id, type, state, worker_id, result from tasks where job_id = ?", id).Rows()
 		if err != nil {
 			ctx.Error(http.StatusBadRequest, err)
@@ -459,9 +486,6 @@ func (s *Server) handleJobID(ctx *Context) {
 		workerName = ""
 		workerAddress = ""
 
-		var reply common.JobDetailReply
-		var replyDetail common.WorkerTaskData
-		reply.JobId = id
 		for rows.Next() {
 			rows.Scan(&taskId, &taskType, &taskState, &workerId, &result)
 			//Getting worker name
@@ -470,7 +494,6 @@ func (s *Server) handleJobID(ctx *Context) {
 				row.Scan(&workerName, &workerAddress)
 			}
 
-			reply.Type = common.JobType(taskType)
 			//Creating Reply Struct
 			replyDetail.TaskId = taskId
 			replyDetail.TaskState = taskState
