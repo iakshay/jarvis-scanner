@@ -238,8 +238,10 @@ class TaskView extends Component {
           </div>
 
           <div className={`card-body ${!this.state.visible ? 'd-none' : ''}`}>
-            {this.props.type == Consts.IsAliveJob ?
-                (<IsAliveResultView data={this.props.data.Data} />) : <PortScanResultView data={this.props.data.Data} />}
+           {this.props.data.TaskState == Consts.Completed ?
+            (this.props.type == Consts.IsAliveJob ?
+                (<IsAliveResultView data={this.props.data.Data} />) : <PortScanResultView data={this.props.data.Data} />) : ''}
+
           </div>
       </div>
         )
@@ -295,14 +297,15 @@ class JobSubmit extends Component {
         },
         body: JSON.stringify(params)
       })
-    .then(response => {
+    .then(response => response.json().then(json => {
         if (response.ok) {
-           that.props.appendRow(params);
+             params.JobId = json.JobId;
+             that.props.appendRow(params);
         }
         else {
             console.log('Failed to submit job');
         }
-    });
+    }));
 
     e.preventDefault();
 }
@@ -429,7 +432,6 @@ class JobList extends Component {
   appendRow = (job) =>
   {
       let newitems = this.state.data;
-      job.JobId = -1;
       newitems.push(job);
       this.setState({
           data: newitems

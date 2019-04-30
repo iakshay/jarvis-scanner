@@ -407,7 +407,7 @@ func (s *Server) handleJobs(ctx *Context) {
 		}
 		job := Job{Type: jobType, Params: jobParams.Data, Tasks: tasks}
 		db.Create(&job)
-		ctx.Text(http.StatusOK, "Successfully submitted job")
+		ctx.Json(http.StatusOK, common.JobSubmitReply{job.Id})
 		return
 	}
 

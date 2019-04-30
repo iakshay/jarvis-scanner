@@ -172,7 +172,9 @@ type JobSubmitParam struct {
 	Data json.RawMessage
 }
 
-type JobSubmitReply struct{}
+type JobSubmitReply struct {
+	JobId int
+}
 
 // list
 type JobListParam struct{}
