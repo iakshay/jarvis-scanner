@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { BrowserRouter as Router, Route, Link } from "react-router-dom";
+import { HashRouter as Router, Route, Link } from "react-router-dom";
 
 var AppConfig = {
     API_BASE: window.location.protocol + '//' + window.location.host
