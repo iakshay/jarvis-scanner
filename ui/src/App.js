@@ -401,7 +401,7 @@ class JobDetail extends Component {
       <div>
       <h3>Job #{this.props.match.params.id}</h3>
       <div className="accordian">
-          {this.state.data.Data && this.state.data.Data.map(task => (<TaskView type={this.state.data.Type} data={task} />))}
+          {this.state.data.Data && this.state.data.Data.map(task => (<TaskView type={this.state.data.JobInfo.Type} data={task} />))}
       </div>
       </div>
     );

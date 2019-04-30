@@ -127,7 +127,6 @@ func (server *Server) startTask(workerId int, task Task, service *RpcService) {
 		}
 		args = common.SendTaskArgs{TaskData: taskData, TaskType: task.Type, TaskId: task.Id}
 	}
-	log.Printf("%s %T", args, args)
 	var reply common.SendTaskReply
 	if err := client.Call("Worker.SendTask", &args, &reply); err != nil {
 		log.Fatal(err)
@@ -316,8 +315,8 @@ func (s *Server) handleJobs(ctx *Context) {
 			rows, err := db.Table("tasks").Select("state").Where("job_id = ?", job.Id).Count(&taskCount).Rows()
 			if err != nil {
 				ctx.Error(http.StatusBadRequest, err)
-	                        return
-		        }
+				return
+			}
 			completedCount = 0
 			queuedCount = 0
 			for rows.Next() {
@@ -379,8 +378,9 @@ func (s *Server) handleJobs(ctx *Context) {
 		}
 
 		jobType := jobParams.Type
-		var workerCount int
-		db.Table("workers").Count(&workerCount)
+		workerCount := 0
+		db.Table("workers").Where("updated_at > ?", time.Now().Add(-3*common.HeartbeatInterval)).Count(&workerCount)
+		log.Println("active workers", workerCount)
 
 		if workerCount == 0 {
 			workerCount = 1
@@ -467,7 +467,7 @@ func (s *Server) handleJobID(ctx *Context) {
 
 	//Checks if JobId exists
 	var count int
-	db.Table("jobs").Where("id = ?",id).Count(&count)
+	db.Table("jobs").Where("id = ?", id).Count(&count)
 	if count == 0 {
 		ctx.Text(http.StatusBadRequest, "Job doesn't exists")
 		return
@@ -481,7 +481,7 @@ func (s *Server) handleJobID(ctx *Context) {
 		var params string
 
 		/*Getting Job information*/
-		row := db.Table("jobs").Select("type,params").Where( "id = ?", id).Row()
+		row := db.Table("jobs").Select("type,params").Where("id = ?", id).Row()
 		row.Scan(&jobType, &params)
 
 		reply.JobInfo.JobId = id
@@ -556,8 +556,8 @@ func (s *Server) handleJobID(ctx *Context) {
 			} else if taskState == common.Queued {
 				queuedCount++
 			} else if taskState == common.InProgress {
-                                reply.JobInfo.JobState = common.JobInProgress
-                        }
+				reply.JobInfo.JobState = common.JobInProgress
+			}
 
 			reply.Data = append(reply.Data, replyDetail)
 		}
@@ -593,7 +593,6 @@ func main() {
 	fmt.Println("starting server")
 	var wg sync.WaitGroup
 
-	//gob.Register(IsAliveParam{})
 	// remove the old database
 	if clean {
 		err := os.Remove(dbPath)
@@ -614,6 +613,11 @@ func main() {
 	}
 	defer db.Close()
 	db.LogMode(true)
+
+	// check the ui exists
+	if _, err := os.Stat("ui/build"); os.IsNotExist(err) {
+		log.Fatal("Failed to find ui build")
+	}
 
 	// Migrate the schema
 	db.AutoMigrate(&Job{})
