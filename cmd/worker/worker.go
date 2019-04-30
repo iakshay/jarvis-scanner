@@ -51,6 +51,7 @@ func (worker *Worker) doTask() {
 				log.Fatal("failed to create scanner:", err)
 			}
 			defer s.Close()
+			log.Println(portScanParam.Ip, portScanParam.Type, portScanParam.PortRange)
 			args.Result, err = s.Scan(portScanParam.Type, portScanParam.PortRange)
 			if err != nil {
 				log.Fatal("failed to scan:", err)
