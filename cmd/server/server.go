@@ -131,7 +131,6 @@ func (server *Server) startTask(workerId int, task Task, service *RpcService) {
 		}
 		args = common.SendTaskArgs{TaskData: taskData, TaskType: task.Type, TaskId: task.Id}
 	}
-	log.Printf("%s %T", args, args)
 	var reply common.SendTaskReply
 	if err := client.Call("Worker.SendTask", &args, &reply); err != nil {
 		log.Fatal(err)
@@ -163,7 +162,7 @@ func (server *Server) Schedule(service *RpcService) {
 			}
 		}
 
-	//	fmt.Printf("active workers: %d\n", len(availWorkers))
+		fmt.Printf("active workers: %d\n", len(availWorkers))
 
 		var queuedTasks []Task
 		db.Order("created_at asc").Where("state = ?", common.Queued).Limit(numAvailWorkers).Find(&queuedTasks)
@@ -203,6 +202,7 @@ func (server *Server) Schedule(service *RpcService) {
 						if currWorker.Id == -1 {
 							db.Table("tasks").Where("id= ?", task.Id).Update("state", common.InProgress)
 						}
+						//db.Table("tasks").Where("id = ?", task.Id).Update("worker", worker)
 						log.Println("starting task for worker")
 						server.startTask(worker.Id, task, service)
 
@@ -214,6 +214,7 @@ func (server *Server) Schedule(service *RpcService) {
 
 		time.Sleep(10 * time.Second)
 	}
+
 }
 
 // https://gist.github.com/reagent/043da4661d2984e9ecb1ccb5343bf438
@@ -246,6 +247,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	http.FileServer(http.Dir("ui/build")).ServeHTTP(w, r)
+
 }
 
 type Context struct {
@@ -257,6 +261,7 @@ type Context struct {
 
 func (c *Context) Text(code int, body string) {
 	c.Response.Header().Set("Content-Type", "application/json")
+	c.Response.Header().Set("Access-Control-Allow-Origin", "*")
 	c.Response.WriteHeader(code)
 
 	payload := struct {
@@ -267,6 +272,7 @@ func (c *Context) Text(code int, body string) {
 
 func (c *Context) Json(code int, body interface{}) {
 	c.Response.Header().Set("Content-Type", "application/json")
+	c.Response.Header().Set("Access-Control-Allow-Origin", "*")
 	c.Response.WriteHeader(code)
 
 	json.NewEncoder(c.Response).Encode(body)
@@ -301,11 +307,44 @@ func (s *Server) handleJobs(ctx *Context) {
 		// create zero length slice, so we don't return null
 		reply.Jobs = make([]common.JobInfo, 0)
 		var replyDetail common.JobInfo
+
+		var taskCount int
+		var completedCount int
+		var queuedCount int
+		var taskState common.TaskState
+
 		for rows.Next() {
 			var job Job
 			rows.Scan(&job.Id, &job.Type, &job.Params)
 			replyDetail.JobId = job.Id
-			replyDetail.Type = job.Type.String()
+			replyDetail.Type = job.Type
+
+			/*Finding Job status*/
+			rows, err := db.Table("tasks").Select("state").Where("job_id = ?", job.Id).Count(&taskCount).Rows()
+			if err != nil {
+				ctx.Error(http.StatusBadRequest, err)
+				return
+			}
+			completedCount = 0
+			queuedCount = 0
+			for rows.Next() {
+				rows.Scan(&taskState)
+				if taskState == common.Complete {
+					completedCount++
+				} else if taskState == common.Queued {
+					queuedCount++
+				} else if taskState == common.InProgress {
+					replyDetail.JobState = common.JobInProgress
+				}
+			}
+			/*Checks if all tasks are completed or all tasks are queued*/
+			if completedCount == taskCount {
+				replyDetail.JobState = common.Completed
+			} else if queuedCount == taskCount {
+				replyDetail.JobState = common.NotStarted
+			}
+
+			/*Unmarshalling Job params*/
 			if job.Type == common.IsAliveJob {
 				var isAliveParam common.JobIsAliveParam
 				err = json.Unmarshal([]byte(job.Params), &isAliveParam)
@@ -347,8 +386,9 @@ func (s *Server) handleJobs(ctx *Context) {
 		}
 
 		jobType := jobParams.Type
-		var workerCount int
-		db.Table("workers").Count(&workerCount)
+		workerCount := 0
+		db.Table("workers").Where("updated_at > ?", time.Now().Add(-3*common.HeartbeatInterval)).Count(&workerCount)
+		log.Println("active workers", workerCount)
 
 		if workerCount == 0 {
 			workerCount = 1
@@ -408,7 +448,7 @@ func (s *Server) handleJobs(ctx *Context) {
 		}
 		job := Job{Type: jobType, Params: jobParams.Data, Tasks: tasks}
 		db.Create(&job)
-		ctx.Text(http.StatusOK, "Successfully submitted job")
+		ctx.Json(http.StatusOK, common.JobSubmitReply{job.Id})
 		return
 	}
 
@@ -434,17 +474,44 @@ func (s *Server) handleJobID(ctx *Context) {
 	log.Printf("%s /jobs/%s JobId: %d", r.Method, params[0], id)
 
 	//Checks if JobId exists
-	var jobExist int
-	row := db.Raw("select COUNT(*) from jobs where id = ?", id).Row()
-	row.Scan(&jobExist)
-	if jobExist == 0 {
+	var count int
+	db.Table("jobs").Where("id = ?", id).Count(&count)
+	if count == 0 {
 		ctx.Text(http.StatusBadRequest, "Job doesn't exists")
 		return
 	}
 
 	switch r.Method {
 	case "GET":
-		rows, err := db.Raw("select id, type, state, worker_id, result from tasks where job_id = ?", id).Rows()
+		var reply common.JobDetailReply
+		var replyDetail common.WorkerTaskData
+		var jobType common.JobType
+		var params string
+
+		/*Getting Job information*/
+		row := db.Table("jobs").Select("type,params").Where("id = ?", id).Row()
+		row.Scan(&jobType, &params)
+
+		reply.JobInfo.JobId = id
+		reply.JobInfo.Type = jobType
+		if jobType == common.IsAliveJob {
+			var isAliveParam common.JobIsAliveParam
+			err = json.Unmarshal([]byte(params), &isAliveParam)
+			if err != nil {
+				ctx.Error(http.StatusBadRequest, err)
+			}
+			reply.JobInfo.Data = isAliveParam
+		} else if jobType == common.PortScanJob {
+			var portScanParam common.JobPortScanParam
+			err = json.Unmarshal([]byte(params), &portScanParam)
+			if err != nil {
+				ctx.Error(http.StatusBadRequest, err)
+			}
+			reply.JobInfo.Data = portScanParam
+		}
+		/*Getting tasks*/
+		var taskCount int
+		rows, err := db.Table("tasks").Select("id, type, state, worker_id, result").Where("job_id = ?", id).Count(&taskCount).Rows()
 		if err != nil {
 			ctx.Error(http.StatusBadRequest, err)
 			return
@@ -459,27 +526,26 @@ func (s *Server) handleJobID(ctx *Context) {
 		var workerAddress string
 		workerName = ""
 		workerAddress = ""
-
-		var reply common.JobDetailReply
-		var replyDetail common.WorkerTaskData
-		reply.JobId = id
-
+		var completedCount int
+		var queuedCount int
+		completedCount = 0
+		queuedCount = 0
 		for rows.Next() {
 			rows.Scan(&taskId, &taskType, &taskState, &workerId, &result)
 			//Getting worker name
 			if workerId != -1 {
-				row := db.Raw("select name, address from workers where id = ?", workerId).Row()
+				row := db.Table("workers").Select("name, address").Where("id = ?", workerId).Row()
 				row.Scan(&workerName, &workerAddress)
 			}
-
 			//Creating Reply Struct
 			replyDetail.TaskId = taskId
-			replyDetail.TaskState = taskState.String()
+			replyDetail.TaskState = taskState
 			replyDetail.WorkerId = workerId
 			replyDetail.WorkerName = workerName
 			replyDetail.WorkerAddress = workerAddress
 			replyDetail.Data = struct{}{}
 			if taskState == common.Complete {
+				completedCount++
 				if taskType == common.IsAliveTask {
 					var isAliveResult common.IsAliveResult
 					err = json.Unmarshal([]byte(result), &isAliveResult)
@@ -495,8 +561,19 @@ func (s *Server) handleJobID(ctx *Context) {
 					}
 					replyDetail.Data = portScanResult
 				}
+			} else if taskState == common.Queued {
+				queuedCount++
+			} else if taskState == common.InProgress {
+				reply.JobInfo.JobState = common.JobInProgress
 			}
+
 			reply.Data = append(reply.Data, replyDetail)
+		}
+		//Find if all tasks are completed
+		if completedCount == taskCount {
+			reply.JobInfo.JobState = common.Completed
+		} else if queuedCount == taskCount {
+			reply.JobInfo.JobState = common.NotStarted
 		}
 		ctx.Json(http.StatusOK, reply)
 		return
@@ -524,7 +601,6 @@ func main() {
 	fmt.Println("starting server")
 	var wg sync.WaitGroup
 
-	//gob.Register(IsAliveParam{})
 	// remove the old database
 	if clean {
 		err := os.Remove(dbPath)
@@ -545,6 +621,11 @@ func main() {
 	}
 	defer db.Close()
 	db.LogMode(true)
+
+	// check the ui exists
+	if _, err := os.Stat("ui/build"); os.IsNotExist(err) {
+		log.Fatal("Failed to find ui build")
+	}
 
 	// Migrate the schema
 	db.AutoMigrate(&Job{})

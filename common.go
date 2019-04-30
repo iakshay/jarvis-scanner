@@ -10,6 +10,7 @@ import "encoding/json"
 type TaskState int
 type TaskType int
 type WorkerState int
+type JobState int
 type JobType int
 type PortScanType int
 type PortStatus int
@@ -31,6 +32,13 @@ const (
 	Unavailable  WorkerState = -1
 	Available    WorkerState = 1
 )
+
+const (
+        NotStarted  JobState = 0
+        JobInProgress  JobState = 1
+        Completed   JobState = 2
+)
+
 
 const (
 	IpAlive IpStatus = 0
@@ -172,7 +180,9 @@ type JobSubmitParam struct {
 	Data json.RawMessage
 }
 
-type JobSubmitReply struct{}
+type JobSubmitReply struct {
+	JobId int
+}
 
 // list
 type JobListParam struct{}
@@ -184,7 +194,8 @@ type JobSubmitData struct {
 
 type JobInfo struct {
 	JobId int
-	Type  string // JobType
+	Type  JobType // JobType
+	JobState JobState
 	Data  interface{}
 }
 
@@ -199,7 +210,7 @@ type JobDetailParam struct {
 
 type WorkerTaskData struct {
 	TaskId        int
-	TaskState     string
+	TaskState     TaskState
 	WorkerId      int
 	WorkerName    string
 	WorkerAddress string
@@ -207,7 +218,7 @@ type WorkerTaskData struct {
 }
 
 type JobDetailReply struct {
-	JobId int
+	JobInfo JobInfo
 	Data  []WorkerTaskData
 }
 
