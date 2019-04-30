@@ -101,7 +101,7 @@ func main() {
 	var serverAddr string
 	var workerAddr string
 	flag.StringVar(&serverAddr, "serverAddr", "localhost:8081", "address of the server")
-	flag.StringVar(&workerAddr, "workerAddr", "localhost:7070", "address of the worker")
+	flag.StringVar(&workerAddr, "workerAddr", "localhost:7071", "address of the worker")
 	flag.Parse()
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -113,6 +113,7 @@ func main() {
 		time.Sleep(5 * time.Second)
 		client, err = rpc.DialHTTP("tcp", serverAddr)
 	}
+
 	worker := new(Worker)
 	worker.Client = client
 	worker.TaskId = -1
@@ -139,6 +140,5 @@ func main() {
 
 	// heartbeat go routine
 	go worker.runHearbeat()
-
 	wg.Wait()
 }

@@ -23,6 +23,8 @@ import (
 
 const NotAllocatedWorkerId int = -1
 
+const NotAllocatedTaskId int = -1
+
 type Task struct {
 	Id          int
 	JobId       int
@@ -30,7 +32,7 @@ type Task struct {
 	Type        common.TaskType
 	WorkerId    int
 	Params      []byte // Allows for Unmarshalling to struct objects, as needed
-	Worker      Worker `gorm:"foreignkey:TaskId; association_foreignkey:Id"`
+	Worker      []byte `gorm:"foreignkey:TaskId; association_foreignkey:Id"`
 	Result      []byte
 	CreatedAt   *time.Time
 	CompletedAt *time.Time
@@ -92,6 +94,8 @@ func (service *RpcService) CompleteTask(args *common.CompleteTaskArgs, reply *co
 		log.Fatal(err)
 	}
 
+	service.db.Table("workers").Where("task_id = ?", args.TaskId).Update("task_id", NotAllocatedTaskId)
+
 	// insert entry in reports table
 	if err := service.db.Table("tasks").Where("Id = ?", args.TaskId).Updates(Task{State: common.Complete, Result: buf}).Error; err != nil {
 		log.Printf("Error adding resort for TaskId %s %d\n", err, args.TaskId)
@@ -149,12 +153,12 @@ func (server *Server) Schedule(service *RpcService) {
 		fmt.Printf("free workers: %d\n", len(freeWorkers))
 
 		// get active workers
-		var availWorkers []Worker
+		availWorkers := make([]Worker, len(freeWorkers))
 		numAvailWorkers := 0
 		for _, worker := range freeWorkers {
 			updatedAt := *(worker.UpdatedAt)
 			if (time.Now().Sub(updatedAt)) <= common.HeartbeatInterval {
-				availWorkers = append(availWorkers, worker)
+				availWorkers[numAvailWorkers] = worker
 				numAvailWorkers += 1
 			}
 		}
@@ -165,14 +169,14 @@ func (server *Server) Schedule(service *RpcService) {
 		db.Order("created_at asc").Where("state = ?", common.Queued).Limit(numAvailWorkers).Find(&queuedTasks)
 		availIndex := 0
 		fmt.Printf("queued tasks: %d\n", len(queuedTasks))
+		var inProgressTasks []Task
+		db.Order("created_at asc").Where("state = ?", common.InProgress).Find(&inProgressTasks)
 
 		for i := 0; i < 2; i++ {
 			var tasks []Task
 			if i == 0 {
 				tasks = queuedTasks
 			} else if availIndex < numAvailWorkers {
-				var inProgressTasks []Task
-				db.Order("created_at asc").Where("state = ?", numAvailWorkers).Find(&inProgressTasks)
 				tasks = inProgressTasks
 			}
 
@@ -182,17 +186,22 @@ func (server *Server) Schedule(service *RpcService) {
 						break
 					}
 
-					currWorker := Worker{}
-					currWorker.Id = -1 // To enable conditional below
+					currWorker := Worker{Id: -1}
 					if i == 1 {
-						currWorker = task.Worker
+						workerBytes := task.Worker
+						if err := json.Unmarshal(workerBytes, &currWorker); err != nil {
+							log.Fatal(err)
+						}
 					}
 
-					if currWorker.Id == -1 || (time.Now().Sub(*(currWorker.UpdatedAt)) > common.HeartbeatInterval) {
+					if currWorker.Id == -1 || (time.Now().Sub(*(currWorker.UpdatedAt)) > common.HeartbeatInterval){
 						worker := availWorkers[availIndex]
+						db.Table("workers").Where("id = ?", worker.Id).Update("task_id", task.Id)
 						db.Table("tasks").Where("id = ?", task.Id).Update("worker_id", worker.Id)
-						if currWorker == -1 {
-							db.Table("tasks").Where("id= ?", task.Id).Update("status", common.InProgress)
+						workerBytes, _ := json.Marshal(&worker)
+						db.Table("tasks").Where("id = ?", task.Id).Update("worker", workerBytes)
+						if currWorker.Id == -1 {
+							db.Table("tasks").Where("id= ?", task.Id).Update("state", common.InProgress)
 						}
 						log.Println("starting task for worker")
 						server.startTask(worker.Id, task, service)
