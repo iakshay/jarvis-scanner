@@ -184,7 +184,7 @@ type JobSubmitData struct {
 
 type JobInfo struct {
 	JobId int
-	Type  string // JobType
+	Type  JobType // JobType
 	Data  interface{}
 }
 
@@ -199,7 +199,7 @@ type JobDetailParam struct {
 
 type WorkerTaskData struct {
 	TaskId        int
-	TaskState     string
+	TaskState     TaskState
 	WorkerId      int
 	WorkerName    string
 	WorkerAddress string
@@ -208,6 +208,7 @@ type WorkerTaskData struct {
 
 type JobDetailReply struct {
 	JobId int
+	Type  JobType
 	Data  []WorkerTaskData
 }
 

@@ -159,7 +159,7 @@ func (server *Server) Schedule(service *RpcService) {
 			}
 		}
 
-	//	fmt.Printf("active workers: %d\n", len(availWorkers))
+		fmt.Printf("active workers: %d\n", len(availWorkers))
 
 		var queuedTasks []Task
 		db.Order("created_at asc").Where("state = ?", common.Queued).Limit(numAvailWorkers).Find(&queuedTasks)
@@ -191,9 +191,11 @@ func (server *Server) Schedule(service *RpcService) {
 					if currWorker.Id == -1 || (time.Now().Sub(*(currWorker.UpdatedAt)) > common.HeartbeatInterval) {
 						worker := availWorkers[availIndex]
 						db.Table("tasks").Where("id = ?", task.Id).Update("worker_id", worker.Id)
-						if currWorker == -1 {
+						//db.Table("tasks").Where("id = ?", task.Id).Update("worker", worker)
+						if currWorker.Id == -1 {
 							db.Table("tasks").Where("id= ?", task.Id).Update("status", common.InProgress)
 						}
+						//db.Table("tasks").Where("id = ?", task.Id).Update("worker", worker)
 						log.Println("starting task for worker")
 						server.startTask(worker.Id, task, service)
 
@@ -205,6 +207,7 @@ func (server *Server) Schedule(service *RpcService) {
 
 		time.Sleep(10 * time.Second)
 	}
+
 }
 
 // https://gist.github.com/reagent/043da4661d2984e9ecb1ccb5343bf438
@@ -237,6 +240,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	http.FileServer(http.Dir("ui/build")).ServeHTTP(w, r)
+
 }
 
 type Context struct {
@@ -248,6 +254,7 @@ type Context struct {
 
 func (c *Context) Text(code int, body string) {
 	c.Response.Header().Set("Content-Type", "application/json")
+	c.Response.Header().Set("Access-Control-Allow-Origin", "*")
 	c.Response.WriteHeader(code)
 
 	payload := struct {
@@ -258,6 +265,7 @@ func (c *Context) Text(code int, body string) {
 
 func (c *Context) Json(code int, body interface{}) {
 	c.Response.Header().Set("Content-Type", "application/json")
+	c.Response.Header().Set("Access-Control-Allow-Origin", "*")
 	c.Response.WriteHeader(code)
 
 	json.NewEncoder(c.Response).Encode(body)
@@ -296,7 +304,7 @@ func (s *Server) handleJobs(ctx *Context) {
 			var job Job
 			rows.Scan(&job.Id, &job.Type, &job.Params)
 			replyDetail.JobId = job.Id
-			replyDetail.Type = job.Type.String()
+			replyDetail.Type = job.Type
 			if job.Type == common.IsAliveJob {
 				var isAliveParam common.JobIsAliveParam
 				err = json.Unmarshal([]byte(job.Params), &isAliveParam)
@@ -454,7 +462,6 @@ func (s *Server) handleJobID(ctx *Context) {
 		var reply common.JobDetailReply
 		var replyDetail common.WorkerTaskData
 		reply.JobId = id
-
 		for rows.Next() {
 			rows.Scan(&taskId, &taskType, &taskState, &workerId, &result)
 			//Getting worker name
@@ -463,9 +470,10 @@ func (s *Server) handleJobID(ctx *Context) {
 				row.Scan(&workerName, &workerAddress)
 			}
 
+			reply.Type = common.JobType(taskType)
 			//Creating Reply Struct
 			replyDetail.TaskId = taskId
-			replyDetail.TaskState = taskState.String()
+			replyDetail.TaskState = taskState
 			replyDetail.WorkerId = workerId
 			replyDetail.WorkerName = workerName
 			replyDetail.WorkerAddress = workerAddress
