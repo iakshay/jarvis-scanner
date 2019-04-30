@@ -300,11 +300,44 @@ func (s *Server) handleJobs(ctx *Context) {
 		// create zero length slice, so we don't return null
 		reply.Jobs = make([]common.JobInfo, 0)
 		var replyDetail common.JobInfo
+
+		var taskCount int
+		var completedCount int
+		var queuedCount int
+		var taskState common.TaskState
+
 		for rows.Next() {
 			var job Job
 			rows.Scan(&job.Id, &job.Type, &job.Params)
 			replyDetail.JobId = job.Id
 			replyDetail.Type = job.Type
+
+			/*Finding Job status*/
+			rows, err := db.Table("tasks").Select("state").Where("job_id = ?", job.Id).Count(&taskCount).Rows()
+			if err != nil {
+				ctx.Error(http.StatusBadRequest, err)
+	                        return
+		        }
+			completedCount = 0
+			queuedCount = 0
+			for rows.Next() {
+				rows.Scan(&taskState)
+				if taskState == common.Complete {
+					completedCount++
+				} else if taskState == common.Queued {
+					queuedCount++
+				} else if taskState == common.InProgress {
+					replyDetail.JobState = common.JobInProgress
+				}
+			}
+			/*Checks if all tasks are completed or all tasks are queued*/
+			if completedCount == taskCount {
+				replyDetail.JobState = common.Completed
+			} else if queuedCount == taskCount {
+				replyDetail.JobState = common.NotStarted
+			}
+
+			/*Unmarshalling Job params*/
 			if job.Type == common.IsAliveJob {
 				var isAliveParam common.JobIsAliveParam
 				err = json.Unmarshal([]byte(job.Params), &isAliveParam)
@@ -433,10 +466,9 @@ func (s *Server) handleJobID(ctx *Context) {
 	log.Printf("%s /jobs/%s JobId: %d", r.Method, params[0], id)
 
 	//Checks if JobId exists
-	var jobExist int
-	row := db.Raw("select COUNT(*) from jobs where id = ?", id).Row()
-	row.Scan(&jobExist)
-	if jobExist == 0 {
+	var count int
+	db.Table("jobs").Where("id = ?",id).Count(&count)
+	if count == 0 {
 		ctx.Text(http.StatusBadRequest, "Job doesn't exists")
 		return
 	}
@@ -449,7 +481,7 @@ func (s *Server) handleJobID(ctx *Context) {
 		var params string
 
 		/*Getting Job information*/
-		row := db.Raw("select type, params from jobs where id = ?", id).Row()
+		row := db.Table("jobs").Select("type,params").Where( "id = ?", id).Row()
 		row.Scan(&jobType, &params)
 
 		reply.JobInfo.JobId = id
@@ -470,7 +502,8 @@ func (s *Server) handleJobID(ctx *Context) {
 			reply.JobInfo.Data = portScanParam
 		}
 		/*Getting tasks*/
-		rows, err := db.Raw("select id, type, state, worker_id, result from tasks where job_id = ?", id).Rows()
+		var taskCount int
+		rows, err := db.Table("tasks").Select("id, type, state, worker_id, result").Where("job_id = ?", id).Count(&taskCount).Rows()
 		if err != nil {
 			ctx.Error(http.StatusBadRequest, err)
 			return
@@ -485,15 +518,17 @@ func (s *Server) handleJobID(ctx *Context) {
 		var workerAddress string
 		workerName = ""
 		workerAddress = ""
-
+		var completedCount int
+		var queuedCount int
+		completedCount = 0
+		queuedCount = 0
 		for rows.Next() {
 			rows.Scan(&taskId, &taskType, &taskState, &workerId, &result)
 			//Getting worker name
 			if workerId != -1 {
-				row := db.Raw("select name, address from workers where id = ?", workerId).Row()
+				row := db.Table("workers").Select("name, address").Where("id = ?", workerId).Row()
 				row.Scan(&workerName, &workerAddress)
 			}
-
 			//Creating Reply Struct
 			replyDetail.TaskId = taskId
 			replyDetail.TaskState = taskState
@@ -502,6 +537,7 @@ func (s *Server) handleJobID(ctx *Context) {
 			replyDetail.WorkerAddress = workerAddress
 			replyDetail.Data = struct{}{}
 			if taskState == common.Complete {
+				completedCount++
 				if taskType == common.IsAliveTask {
 					var isAliveResult common.IsAliveResult
 					err = json.Unmarshal([]byte(result), &isAliveResult)
@@ -517,8 +553,19 @@ func (s *Server) handleJobID(ctx *Context) {
 					}
 					replyDetail.Data = portScanResult
 				}
-			}
+			} else if taskState == common.Queued {
+				queuedCount++
+			} else if taskState == common.InProgress {
+                                reply.JobInfo.JobState = common.JobInProgress
+                        }
+
 			reply.Data = append(reply.Data, replyDetail)
+		}
+		//Find if all tasks are completed
+		if completedCount == taskCount {
+			reply.JobInfo.JobState = common.Completed
+		} else if queuedCount == taskCount {
+			reply.JobInfo.JobState = common.NotStarted
 		}
 		ctx.Json(http.StatusOK, reply)
 		return
