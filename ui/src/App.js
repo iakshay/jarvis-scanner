@@ -2,7 +2,7 @@ import React, { Component } from 'react';
 import { BrowserRouter as Router, Route, Link } from "react-router-dom";
 
 var AppConfig = {
-    API_BASE: 'http://10.0.0.10:8000'
+    API_BASE: window.location.protocol + '//' + window.location.host
 };
 
 

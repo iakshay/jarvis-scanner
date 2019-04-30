@@ -52,6 +52,9 @@ func (worker *Worker) doTask() {
 			}
 			defer s.Close()
 			args.Result, err = s.Scan(portScanParam.Type, portScanParam.PortRange)
+			if err != nil {
+				log.Fatal("failed to scan:", err)
+			}
 		}
 	default:
 		log.Fatal("Invalid task type")
