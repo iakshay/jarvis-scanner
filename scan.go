@@ -24,6 +24,7 @@ import (
 	"net"
 	"sync"
 	"time"
+	"bytes"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -270,9 +271,10 @@ func NormalPortScan(ip net.IP, portRange PortRange, timeout time.Duration) PortS
 			mu.Lock()
 			if status == PortOpen {
 				conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-				byteArray := make([]byte, 64)
+				byteArray := make([]byte, 256)
 				if _, e := conn.Read(byteArray); e == nil {
 					fmt.Printf("%s\n", string(byteArray))
+					byteArray = bytes.Trim(byteArray, "\x00")
 					result[port] = PortResult{status, string(byteArray)}
 				}
 			} else {
