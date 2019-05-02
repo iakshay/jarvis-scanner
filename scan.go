@@ -261,15 +261,23 @@ func NormalPortScan(ip net.IP, portRange PortRange, timeout time.Duration) PortS
 			defer wg.Done()
 			var status PortStatus
 			addr := fmt.Sprintf("%s:%d", ip.String(), port)
-			_, err := net.DialTimeout("tcp", addr, timeout)
-
+			conn, err := net.DialTimeout("tcp", addr, timeout)
 			if err != nil {
 				status = PortClosed
 			} else {
 				status = PortOpen
 			}
 			mu.Lock()
-			result[port] = PortResult{status, ""}
+			if status == PortOpen {
+				conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+				byteArray := make([]byte, 64)
+				if _, e := conn.Read(byteArray); e == nil {
+					fmt.Printf("%s\n", string(byteArray))
+					result[port] = PortResult{status, string(byteArray)}
+				}
+			} else {
+				result[port] = PortResult{status, ""}
+			}
 			mu.Unlock()
 		}(port)
 	}
