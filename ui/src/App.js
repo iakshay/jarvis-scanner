@@ -179,7 +179,7 @@ class PortScanResultView extends Component {
               <tr>
                 <td>{key}</td>
                 <td>{PortStatusStr(this.props.data[key].Status)}</td>
-                <td>Not available</td>
+                <td>{`${this.props.data[key].hasOwnProperty('Banner') ? this.props.data[key].Banner : "Not available"}`}</td>
               </tr>
             ))
           }
