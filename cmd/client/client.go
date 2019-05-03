@@ -21,8 +21,8 @@ func Usage() {
 		"For task=delete; general format of execution is:\n"+
 		"\t./client -task=delete -id=4\n\n"+
 		"For task=submit; general format of execution is:\n"+
-		"\t./client -task=submit -type=isAlive -ip=1.2.3.4/255\n"+
-		"\t./client -task=submit -type=portScan -ip=1.2.3.4 -mode=Syn -start=100 -end=200\n\n")
+		"\t./client -task=submit -type=IsAlive -ip=192.168.2.1/24\n"+
+		"\t./client -task=submit -type=PortScan -ip=127.0.0.1 -mode=Syn -start=0 -end=655\n\n")
 
 	fmt.Printf("Possible values for the flags are:\n")
 	flag.PrintDefaults()
@@ -42,10 +42,10 @@ func main() {
 	flag.StringVar(&taskName, "task", "", "Enter the type of task: {list, view, delete or submit}")
 	flag.IntVar(&jobId, "id", 0, "Enter the id of the job: { greater than 0}")
 	flag.StringVar(&jobType, "type", "", "Enter the type of the job: {isAlive or portScan}")
-	flag.StringVar(&IP, "ip", "", "Enter the ip address or range of ip address : {1.2.3.4/255}")
-	flag.StringVar(&scanMode, "mode", "", "Enter the mode of the scanning : {Normal,SYN or FIN}")
-	flag.StringVar(&rangeStart, "start", "", "Enter the start port of range of port for scanning")
-	flag.StringVar(&rangeEnd, "end", "", "Enter the end port of range of port for scanning")
+	flag.StringVar(&IP, "ip", "", "Enter the ip address or range of ip address : {192.168.2.1/24 or 127.0.0.1}")
+	flag.StringVar(&scanMode, "mode", "Normal", "Enter the mode of the scanning : {Normal,Syn or Fin}")
+	flag.StringVar(&rangeStart, "start", "0", "Enter the start port of range of port for scanning")
+	flag.StringVar(&rangeEnd, "end", "65535", "Enter the end port of range of port for scanning")
 
 
 
@@ -103,23 +103,14 @@ func main() {
 		}
 		fmt.Println("response Body : ", string(respBody))
 	} else if taskName == "submit" {
-		if jobType == "isAlive" && IP != "" {
+		if jobType == "IsAlive" && IP != "" {
 			fmt.Printf("value of task:%s, jobtype:%s, ip:%s\n",taskName, jobType, IP)
 			//creating json form
 			message := map[string]interface{}{
 		                "Type" : 0,
 			        "Data" :map[string]interface{} {"IpBlock" : IP},
 			}
-/*			var jsonStr = `{
-				"Type": 0,
-				"Data": {"IpBlock": IP}
-			}
-			`
-			jsonMap := make(map[string]interface{})
-			err := json.Unmarshal([]byte(jsonStr), &jsonMap)
-			if err != nil {
-				panic(err)
-			}*/
+
 			bytesRepresentation, err := json.Marshal(message)
 			if err != nil {
 				log.Fatalln(err)
@@ -133,8 +124,8 @@ func main() {
 			body, _ := ioutil.ReadAll(resp.Body)
 			log.Println("\nReturned value from server: ",string(body))
 
-		} else if jobType == "portScan" && IP != "" && scanMode != "" && rangeStart != "" && rangeEnd != ""{
-			fmt.Printf("value of task:%s, jobtype:%s, ip:%s, scanMode:%s, rangeStart:%s, rangeEnd%s\n",taskName, jobType, IP, scanMode, rangeStart, rangeEnd)
+		} else if jobType == "PortScan" && IP != ""{
+			fmt.Printf("value of task: %s, jobtype: %s, ip: %s, scanMode: %s, rangeStart: %s, rangeEnd: %s\n",taskName, jobType, IP, scanMode, rangeStart, rangeEnd)
 			//Converting variables for sending
 			var IpAddress net.IP
 			IpAddress = net.ParseIP(IP)
