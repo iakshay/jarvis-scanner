@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 	"bytes"
@@ -250,6 +251,49 @@ func (s *scanner) send(l ...gopacket.SerializableLayer) error {
 	return s.handle.WritePacketData(s.buf.Bytes())
 }
 
+func HandleWebPort(port uint16, addr string, result PortScanResult) {
+
+	var prefix string
+	switch port {
+		case 80:
+			prefix = "http://"
+			break
+		case 443:
+			prefix = "https://"
+	}
+
+	var resp *http.Response
+	var err error
+
+	switch port {
+		case 80:
+			resp, err = http.Head(prefix + addr + "/")
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			break
+		case 443:
+			tr := &http.Transport{
+				MaxIdleConns:	10,
+				IdleConnTimeout:	30 * time.Second,
+				DisableCompression:	true,
+			}
+			client := &http.Client{Transport: tr}
+			resp, err = client.Head(prefix + addr + "/")
+			if err != nil {
+				log.Println(err)
+			}
+	}
+
+	// TODO Finish case for HTTPS (port 443), so that I can get rid of this conditional
+	if port == 80 {
+		header := resp.Header
+		result[port] = PortResult{PortOpen, header.Get("server")}
+	}
+
+}
+
 func NormalPortScan(ip net.IP, portRange PortRange, timeout time.Duration) PortScanResult {
 	wg := sync.WaitGroup{}
 	var mu sync.Mutex
@@ -270,12 +314,16 @@ func NormalPortScan(ip net.IP, portRange PortRange, timeout time.Duration) PortS
 			}
 			mu.Lock()
 			if status == PortOpen {
-				conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-				byteArray := make([]byte, 256)
-				if _, e := conn.Read(byteArray); e == nil {
-					fmt.Printf("%s\n", string(byteArray))
-					byteArray = bytes.Trim(byteArray, "\x00")
-					result[port] = PortResult{status, string(byteArray)}
+				if (port == 80) || (port == 443) {
+					HandleWebPort(port, addr, result)
+				} else {
+					conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+					byteArray := make([]byte, 256)
+					if _, e := conn.Read(byteArray); e == nil {
+						fmt.Printf("%s\n", string(byteArray))
+						byteArray = bytes.Trim(byteArray, "\x00")
+						result[port] = PortResult{status, string(byteArray)}
+					}
 				}
 			} else {
 				result[port] = PortResult{status, ""}
