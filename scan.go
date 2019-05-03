@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -251,6 +253,11 @@ func (s *scanner) send(l ...gopacket.SerializableLayer) error {
 	return s.handle.WritePacketData(s.buf.Bytes())
 }
 
+
+func verifyPeerCert(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	return nil
+}
+
 func HandleWebPort(port uint16, addr string, result PortScanResult) {
 
 	var prefix string
@@ -274,23 +281,29 @@ func HandleWebPort(port uint16, addr string, result PortScanResult) {
 			}
 			break
 		case 443:
-			tr := &http.Transport{
+			/*tr := &http.Transport{
 				MaxIdleConns:	10,
 				IdleConnTimeout:	30 * time.Second,
 				DisableCompression:	true,
+			}*/
+			transport := &http.Transport {
+				TLSClientConfig: &tls.Config {
+					InsecureSkipVerify:	true,
+					VerifyPeerCertificate: verifyPeerCert,
+				},
 			}
-			client := &http.Client{Transport: tr}
+			client := &http.Client{Transport: transport}
 			resp, err = client.Head(prefix + addr + "/")
 			if err != nil {
 				log.Println(err)
 			}
 	}
 
-	// TODO Finish case for HTTPS (port 443), so that I can get rid of this conditional
-	if port == 80 {
 		header := resp.Header
+		for key := range header {
+			log.Printf("%s: %s\n", key, header.Get(key))
+		}
 		result[port] = PortResult{PortOpen, header.Get("server")}
-	}
 
 }
 
