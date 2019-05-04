@@ -196,6 +196,8 @@ type JobInfo struct {
 	JobId int
 	Type  JobType // JobType
 	JobState JobState
+	JobCreatedAt   time.Time
+	JobCompletedAt time.Time
 	Data  interface{}
 }
 
@@ -214,6 +216,8 @@ type WorkerTaskData struct {
 	WorkerId      int
 	WorkerName    string
 	WorkerAddress string
+	CreateTime    time.Time
+	CompleteTime  time.Time
 	Data          TaskData
 }
 

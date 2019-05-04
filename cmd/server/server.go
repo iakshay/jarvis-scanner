@@ -312,24 +312,38 @@ func (s *Server) handleJobs(ctx *Context) {
 		var completedCount int
 		var queuedCount int
 		var taskState common.TaskState
+		var taskCreate time.Time
+		var taskComplete time.Time
+		var tempJobComplete time.Time
+		var taskDuration time.Duration
 
 		for rows.Next() {
 			var job Job
 			rows.Scan(&job.Id, &job.Type, &job.Params)
 			replyDetail.JobId = job.Id
 			replyDetail.Type = job.Type
+			replyDetail.JobCompletedAt = time.Time{}
 
 			/*Finding Job status*/
-			rows, err := db.Table("tasks").Select("state").Where("job_id = ?", job.Id).Count(&taskCount).Rows()
+			rows, err := db.Table("tasks").Select("state, created_at, completed_at").Where("job_id = ?", job.Id).Count(&taskCount).Rows()
 			if err != nil {
 				ctx.Error(http.StatusBadRequest, err)
 				return
 			}
 			completedCount = 0
 			queuedCount = 0
+			taskDuration = 0
 			for rows.Next() {
-				rows.Scan(&taskState)
+				rows.Scan(&taskState, &taskCreate, &taskComplete)
+				replyDetail.JobCreatedAt = taskCreate
+
 				if taskState == common.Complete {
+
+					/*Finds the MAX completion time of Tasks*/
+					if taskDuration < taskComplete.Sub(taskCreate) {
+                                                taskDuration = taskComplete.Sub(taskCreate)
+                                                tempJobComplete = taskComplete
+                                        }
 					completedCount++
 				} else if taskState == common.Queued {
 					queuedCount++
@@ -337,8 +351,11 @@ func (s *Server) handleJobs(ctx *Context) {
 					replyDetail.JobState = common.JobInProgress
 				}
 			}
+
 			/*Checks if all tasks are completed or all tasks are queued*/
 			if completedCount == taskCount {
+				//Assigns max task completion time as Job completion time
+				replyDetail.JobCompletedAt = tempJobComplete
 				replyDetail.JobState = common.Completed
 			} else if queuedCount == taskCount {
 				replyDetail.JobState = common.NotStarted
@@ -494,6 +511,8 @@ func (s *Server) handleJobID(ctx *Context) {
 
 		reply.JobInfo.JobId = id
 		reply.JobInfo.Type = jobType
+		reply.JobInfo.JobCompletedAt = time.Time{}
+
 		if jobType == common.IsAliveJob {
 			var isAliveParam common.JobIsAliveParam
 			err = json.Unmarshal([]byte(params), &isAliveParam)
@@ -511,7 +530,12 @@ func (s *Server) handleJobID(ctx *Context) {
 		}
 		/*Getting tasks*/
 		var taskCount int
-		rows, err := db.Table("tasks").Select("id, type, state, worker_id, result").Where("job_id = ?", id).Count(&taskCount).Rows()
+		var taskCreate time.Time
+                var taskComplete time.Time
+                var tempJobComplete time.Time
+                var taskDuration time.Duration
+
+		rows, err := db.Table("tasks").Select("id, type, state, worker_id, created_at, completed_at,  result").Where("job_id = ?", id).Count(&taskCount).Rows()
 		if err != nil {
 			ctx.Error(http.StatusBadRequest, err)
 			return
@@ -530,8 +554,11 @@ func (s *Server) handleJobID(ctx *Context) {
 		var queuedCount int
 		completedCount = 0
 		queuedCount = 0
+		taskDuration = 0
 		for rows.Next() {
-			rows.Scan(&taskId, &taskType, &taskState, &workerId, &result)
+			rows.Scan(&taskId, &taskType, &taskState, &workerId, &taskCreate, &taskComplete, &result)
+			reply.JobInfo.JobCreatedAt = taskCreate
+
 			//Getting worker name
 			if workerId != -1 {
 				row := db.Table("workers").Select("name, address").Where("id = ?", workerId).Row()
@@ -543,8 +570,14 @@ func (s *Server) handleJobID(ctx *Context) {
 			replyDetail.WorkerId = workerId
 			replyDetail.WorkerName = workerName
 			replyDetail.WorkerAddress = workerAddress
+			replyDetail.CreateTime = taskCreate
+			replyDetail.CompleteTime = taskComplete
 			replyDetail.Data = struct{}{}
 			if taskState == common.Complete {
+				if taskDuration < taskComplete.Sub(taskCreate) {
+                                        taskDuration = taskComplete.Sub(taskCreate)
+                                        tempJobComplete = taskComplete
+                                }
 				completedCount++
 				if taskType == common.IsAliveTask {
 					var isAliveResult common.IsAliveResult
@@ -571,6 +604,8 @@ func (s *Server) handleJobID(ctx *Context) {
 		}
 		//Find if all tasks are completed
 		if completedCount == taskCount {
+			//Finds Job completion time from the max task completion time
+			reply.JobInfo.JobCompletedAt = tempJobComplete
 			reply.JobInfo.JobState = common.Completed
 		} else if queuedCount == taskCount {
 			reply.JobInfo.JobState = common.NotStarted
