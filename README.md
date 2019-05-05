@@ -11,8 +11,8 @@
 
 ```bash
   # Add your public key to Github
-	# install golang 1.12
-	# https://github.com/golang/go/wiki/Ubuntu
+  # install golang 1.12
+  # https://github.com/golang/go/wiki/Ubuntu
   # Setup $GOPATH
   # Clone the repository
   mkdir -p $GOPATH/src/github.com/iakshay/jarvis-scanner
@@ -40,11 +40,11 @@
   go get -u golang.org/x/tools/cmd/stringer
 
   # Running worker ($GOPATH/bin/worker)
-	# need root privilege for listening on network device and sending icmp packets
-	# change serverAddr and workerAddr for multiple machine or vm setup
-	sudo go run cmd/worker/worker.go --serverAddr="127.0.0.1:8001" --workerAddr="127.0.0.1:7071"
+  # need root privilege for listening on network device and sending icmp packets
+  # change serverAddr and workerAddr for multiple machine or vm setup
+  sudo go run cmd/worker/worker.go --serverAddr="127.0.0.1:8001" --workerAddr="127.0.0.1:7071"
 
-	## To run the server, build the ui first
+  ## To run the server, build the ui first
   # install nodejs and npm
   cd ui/
   # install dependencies
@@ -52,31 +52,31 @@
   # build the ui
   npm run build
   
-	# Running server ($GOPATH/bin/server) 
-	# note: clean flag will delete existing database
-	go run cmd/server/server.go --serverAddr="0.0.0.0:8000" --clean
+  # Running server ($GOPATH/bin/server) 
+  # note: clean flag will delete existing database
+  go run cmd/server/server.go --serverAddr="0.0.0.0:8000" --clean
 
-	## Running Command-line Client
+  ## Running Command-line Client
 
   # Building client
-	cd cmd/client
-	go build client.go
+  cd cmd/client
+  go build client.go
  
   # Sample usage of Command-line Client
   # For list jobs
-	./client -task=list
+  ./client -task=list
 
   # For view specific job
-	./client -task=view -id=1
+  ./client -task=view -id=1
 
   # For delete job
-	./client -task=delete -id=1
+  ./client -task=delete -id=1
 
   # For submit IsAlive Job
-	./client -task=submit -type=IsAlive -ip=192.168.2.1/24
+  ./client -task=submit -type=IsAlive -ip=192.168.2.1/24
 
   # For submit PortScan Job
-	./client -task=submit -type=PortScan -ip=69.63.176.0 -mode=Normal -start=0 -end=443
+  ./client -task=submit -type=PortScan -ip=69.63.176.0 -mode=Normal -start=0 -end=443
 
 ```
  
@@ -87,10 +87,10 @@ IsAlive w/ IpBlock
 ```js
 // POST /jobs
 {
-	"Type": 0,
-	"Data": {
-		"IpBlock": "192.168.2.1/24"
-	}
+ "Type": 0,
+ "Data": {
+  "IpBlock": "192.168.2.1/24"
+ }
 }
 ```
 IsAlive w/ Ip
@@ -98,10 +98,10 @@ IsAlive w/ Ip
 ```js
 // POST /jobs
 {
-	"Type": 0,
-	"Data": {
-		"IpBlock": "192.168.2.1"
-	}
+ "Type": 0,
+ "Data": {
+  "IpBlock": "192.168.2.1"
+ }
 }
 ```
 
@@ -110,14 +110,14 @@ PortScan
 ```js
 // POST /jobs
 {
-	"Type": 1,
-	"Data": {
-		"Type": 1,
-		"Ip": "127.0.0.1",
-		 "PortRange": {
-		 	"Start": 0,
-		 	"End": 65535
-		 }
-	}
+ "Type": 1,
+ "Data": {
+  "Type": 1,
+  "Ip": "127.0.0.1",
+   "PortRange": {
+   "Start": 0,
+   "End": 65535
+   }
+ }
 }
 ```
