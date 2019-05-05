@@ -150,9 +150,10 @@ class JobSnippet extends Component {
   renderMain() {
     return  (<div className="job-snippet row mb-10 p-3">
       <div className="col-10">
-      <div><strong>#</strong>{this.props.data.JobId} / <strong>Type: </strong>{JobTypeStr(this.props.data.Type)} / <strong>Status: </strong>{TaskStateStr(this.props.data.JobState)} </div>
-      <div><strong>Creation time: </strong>{moment(this.props.data.JobCreatedAt).fromNow()} 
-
+      <div>Job <strong>#</strong>{this.props.data.JobId} /&nbsp;
+      <strong>Type: </strong>{JobTypeStr(this.props.data.Type)} /&nbsp;
+      <strong>Status: </strong>{TaskStateStr(this.props.data.JobState)} /&nbsp;
+      <strong>Creation: </strong>{moment(this.props.data.JobCreatedAt).fromNow()} 
       {this.props.data.JobState == Consts.Completed ? (<span> / <strong>Duration:</strong> {moment.duration(moment(this.props.data.JobCompletedAt).diff(moment(this.props.data.JobCreatedAt))).asSeconds()} seconds</span>) : ''}
       </div>
       {this.props.data.Type == Consts.PortScanJob ? 
@@ -242,8 +243,16 @@ class TaskView extends Component {
       return (
         <div className="card mb-2">
           <div className="card-header" style={{cursor: 'pointer'}} onClick={this.toggleView}>
-             <h5 className="mb-0">Task #{this.props.data.TaskId}</h5>
-             <span>State: {TaskStateStr(this.props.data.TaskState)} <div className={`${this.props.data.WorkerId == -1 ? 'd-none' : ''}`}>WorkerId: {this.props.data.WorkerId} Name: {this.props.data.WorkerName} Address: {this.props.data.WorkerAddress} </div></span>
+             <span> Task <strong>#{this.props.data.TaskId}</strong> /&nbsp;
+             <strong>State:</strong> {TaskStateStr(this.props.data.TaskState)} /&nbsp;
+             <strong>Creation: </strong>{moment(this.props.data.CreateTime).format('LLL')} 
+             {this.props.data.TaskState == Consts.Completed ? (<span> / <strong>Duration:</strong> {moment.duration(moment(this.props.data.CompleteTime).diff(moment(this.props.data.CreateTime))).asSeconds()} seconds</span>) : ''}
+             </span>
+             <div className={`${this.props.data.WorkerId == -1 ? 'd-none' : ''}`}>
+               Worker <strong>#{this.props.data.WorkerId}</strong> /&nbsp;
+               <strong>Name:</strong> {this.props.data.WorkerName} /&nbsp;
+               <strong>Address:</strong> {this.props.data.WorkerAddress} 
+             </div>
           </div>
 
           <div className={`card-body ${!this.state.visible ? 'd-none' : ''}`}>
