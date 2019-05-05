@@ -49,6 +49,31 @@ To start the frontend server
   npm start
 ```
 
+Running Command-line Client
+
+```
+  # Building client
+	cd cmd/client
+	go build client.go
+ 
+  # Sample usage of Command-line Client
+  # For list jobs
+	./client -task=list
+
+  # For view specific job
+	./client -task=view -id=1
+
+  # For delete job
+	./client -task=delete -id=1
+
+  # For submit IsAlive Job
+	./client -task=submit -type=IsAlive -ip=192.168.2.1/24
+
+  # For submit PortScan Job
+	./client -task=submit -type=PortScan -ip=69.63.176.0 -mode=Normal -start=0 -end=443
+
+```
+ 
 ## Examples
 
 IsAlive w/ IpBlock
