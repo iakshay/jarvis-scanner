@@ -77,6 +77,22 @@
 
   # For submit PortScan Job
   ./client -task=submit -type=PortScan -ip=69.63.176.0 -mode=Normal -start=0 -end=443
+  
+  ## Testing
+  # Setup 2 VM's to run tests
+  # install virtualbox and vagrant
+  # start the vms, refer Vagrantfile
+  vagrant up
+  
+  # login to server vm
+  vagrant ssh server
+  # start listening on tcp ports 7000 and 8000
+  nc -l 7000 &
+  nc -l 8000 &
+  
+  # login to client vm
+  vagrant ssh client
+  sudo go test
 
 ```
  
