@@ -1,8 +1,11 @@
 ## Jarvis Scanner
 
-[!home screen](doc/home.png)
+![home screen](docs/home.png)
+**Home screen** - *list all jobs*
 
-[!detail screen](doc/detail.png)
+
+![detail screen](docs/detail.png)
+**Detail screen** - *list workers, tasks and its output*
 
 ### Setup
 
@@ -81,7 +84,8 @@
 
 IsAlive w/ IpBlock
 
-```json
+```js
+// POST /jobs
 {
 	"Type": 0,
 	"Data": {
@@ -91,7 +95,8 @@ IsAlive w/ IpBlock
 ```
 IsAlive w/ Ip
 
-```json
+```js
+// POST /jobs
 {
 	"Type": 0,
 	"Data": {
@@ -102,7 +107,8 @@ IsAlive w/ Ip
 
 PortScan
 
-```json
+```js
+// POST /jobs
 {
 	"Type": 1,
 	"Data": {
