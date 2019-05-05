@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
+	"os"
 	"sync"
 	"time"
 )
@@ -133,7 +134,11 @@ func main() {
 	go http.Serve(l, nil)
 
 	// register worker
-	args := &common.RegisterWorkerArgs{Name: "worker", Address: workerAddr}
+	workerName, err := os.Hostname()
+	if err != nil {
+		workerName = "worker"
+	}
+	args := &common.RegisterWorkerArgs{Name: workerName, Address: workerAddr}
 	var reply common.RegisterWorkerReply
 
 	err = client.Call("Server.RegisterWorker", args, &reply)

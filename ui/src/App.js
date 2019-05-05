@@ -46,7 +46,7 @@ function TaskStateStr(taskState) {
   taskState = parseInt(taskState);
   if (taskState === 0)
   {
-    return "Consts.Queued"
+    return "Queued"
   }
 
   if (taskState === 1)
