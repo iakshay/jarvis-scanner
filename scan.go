@@ -275,15 +275,11 @@ func HandleWebPort(port uint16, addr string, result PortScanResult) {
 		resp, err = http.Head(prefix + addr + "/")
 		if err != nil {
 			log.Println(err)
+			result[port] = PortResult{PortOpen, ""}
 			return
 		}
 		break
 	case 443:
-		/*tr := &http.Transport{
-			MaxIdleConns:	10,
-			IdleConnTimeout:	30 * time.Second,
-			DisableCompression:	true,
-		}*/
 		transport := &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify:    true,
@@ -294,6 +290,8 @@ func HandleWebPort(port uint16, addr string, result PortScanResult) {
 		resp, err = client.Head(prefix + addr + "/")
 		if err != nil {
 			log.Println(err)
+			result[port] = PortResult{PortOpen, ""}
+			return
 		}
 	}
 
