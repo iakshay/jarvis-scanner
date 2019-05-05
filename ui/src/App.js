@@ -157,8 +157,8 @@ class JobSnippet extends Component {
       {this.props.data.JobState == Consts.Completed ? (<span> / <strong>Duration:</strong> {moment.duration(moment(this.props.data.JobCompletedAt).diff(moment(this.props.data.JobCreatedAt))).asSeconds()} seconds</span>) : ''}
       </div>
       {this.props.data.Type == Consts.PortScanJob ? 
-        (<div>Mode: {PortScanTypeStr(this.props.data.Data.Type)} / Ip: {this.props.data.Data.Ip} / Ports: {this.props.data.Data.PortRange.Start}-{this.props.data.Data.PortRange.End}</div>)
-        : (<div>Ip: {this.props.data.Data.IpBlock}</div>)}
+        (<div>Mode: {PortScanTypeStr(this.props.data.Data.Type)} / IP: {this.props.data.Data.Ip} / Ports: {this.props.data.Data.PortRange.Start}-{this.props.data.Data.PortRange.End}</div>)
+        : (<div>IP / CIDR: {this.props.data.Data.IpBlock}</div>)}
         </div>
       {this.props.showButtons ? (<div className="col-2">
         <Link className="btn btn-primary mr-1" to={`/view/${this.props.data.JobId}`}>detail</Link>
@@ -346,7 +346,7 @@ class JobSubmit extends Component {
             </div>
             </div>
           <div className="form-group col-6 mr-2">
-          <label for="ipBlock" className="col-sm-2">IpBlock</label>
+          <label for="ipBlock" className="col-sm-3" style={{marginRight:'-25px'}}>{`IP ${parseInt(this.state.jobType) == Consts.IsAliveJob ? 'or CIDR' : ''}`}</label>
           <div className="col-sm-4">
           <input style={{width:'215px'}}className="form-control"
                          type="text"
@@ -371,7 +371,7 @@ class JobSubmit extends Component {
             </div>
             </div>
             <div className="form-group col-6 mr-3">
-            <label for="portMin" className="col-sm-2">Ports</label>
+            <label for="portMin" className="col-sm-3" style={{marginRight:'-25px'}}>Ports</label>
             <div className="col-sm-6">
             <input style={{width:'100px'}} className="form-control "
                            type="number"
@@ -382,7 +382,7 @@ class JobSubmit extends Component {
             <input style={{width:'100px'}} className="form-control"
                            type="number"
                            name="portMax"
-                           defaultValue="65535"
+                           defaultValue="443"
                            onChange={this.handleChange} /></div></div></div>) : '' }
 
           <button type="button" className="btn btn-primary" onClick={this.submitJob}>submit job</button>
