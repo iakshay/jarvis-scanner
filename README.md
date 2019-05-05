@@ -1,9 +1,15 @@
 ## Jarvis Scanner
 
+[!home screen](doc/home.png)
+
+[!detail screen](doc/detail.png)
+
 ### Setup
 
 ```bash
   # Add your public key to Github
+	# install golang 1.12
+	# https://github.com/golang/go/wiki/Ubuntu
   # Setup $GOPATH
   # Clone the repository
   mkdir -p $GOPATH/src/github.com/iakshay/jarvis-scanner
@@ -30,30 +36,25 @@
   # optional: used to generate strings.go
   go get -u golang.org/x/tools/cmd/stringer
 
-  # build and install worker and server
-  go install ./...
-
   # Running worker ($GOPATH/bin/worker)
-  worker
+	# need root privilege for listening on network device and sending icmp packets
+	# change serverAddr and workerAddr for multiple machine or vm setup
+	sudo go run cmd/worker/worker.go --serverAddr="127.0.0.1:8001" --workerAddr="127.0.0.1:7071"
 
-  # Running server ($GOPATH/bin/server) 
-  server
-```
-
-To start the frontend server
-
-```
-  Install Node and NPM
+	## To run the server, build the ui first
+  # install nodejs and npm
   cd ui/
   # install dependencies
   npm install
-  # start server
-  npm start
-```
+  # build the ui
+  npm run build
+  
+	# Running server ($GOPATH/bin/server) 
+	# note: clean flag will delete existing database
+	go run cmd/server/server.go --serverAddr="0.0.0.0:8000" --clean
 
-Running Command-line Client
+	## Running Command-line Client
 
-```
   # Building client
 	cd cmd/client
 	go build client.go
