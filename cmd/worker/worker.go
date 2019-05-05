@@ -40,7 +40,7 @@ func (worker *Worker) doTask() {
 			log.Fatal("Invalid param data")
 		}
 		if portScanParam.Type == common.NormalScan {
-			args.Result = common.NormalPortScan(portScanParam.Ip, portScanParam.PortRange, 3*time.Second)
+			args.Result = common.NormalPortScan(portScanParam.Ip, portScanParam.PortRange, 6*time.Second)
 
 		} else {
 			router, err := routing.New()
