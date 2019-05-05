@@ -1,4 +1,5 @@
 import React, { Component } from 'react';
+import moment from 'moment';
 import { HashRouter as Router, Route, Link } from "react-router-dom";
 
 var AppConfig = {
@@ -146,19 +147,27 @@ class JobSnippet extends Component {
       e.preventDefault();
   }
 
-  render() {
-      return (<div className="job-snippet row mb-10 p-3">
+  renderMain() {
+    return  (<div className="job-snippet row mb-10 p-3">
       <div className="col-10">
-      <div><strong>#</strong>{this.props.data.JobId} / <strong>Type: </strong>{JobTypeStr(this.props.data.Type)}</div>
+      <div><strong>#</strong>{this.props.data.JobId} / <strong>Type: </strong>{JobTypeStr(this.props.data.Type)} / <strong>Status: </strong>{TaskStateStr(this.props.data.JobState)} </div>
+      <div><strong>Creation time: </strong>{moment(this.props.data.JobCreatedAt).fromNow()} 
+
+      {this.props.data.JobState == Consts.Completed ? (<span> / <strong>Duration:</strong> {moment.duration(moment(this.props.data.JobCompletedAt).diff(moment(this.props.data.JobCreatedAt))).humanize()}</span>) : ''}
+      </div>
       {this.props.data.Type == Consts.PortScanJob ? 
         (<div>Mode: {PortScanTypeStr(this.props.data.Data.Type)} / Ip: {this.props.data.Data.Ip} / Ports: {this.props.data.Data.PortRange.Start}-{this.props.data.Data.PortRange.End}</div>)
         : (<div>Ip: {this.props.data.Data.IpBlock}</div>)}
         </div>
-      <div className="col-2">
+      {this.props.showButtons ? (<div className="col-2">
         <Link className="btn btn-primary mr-1" to={`/view/${this.props.data.JobId}`}>detail</Link>
         <button type="button" className="btn btn-danger mr-1" onClick={this.deleteJob}>delete</button>
-      </div>
-      </div>)
+      </div>) : <div/ >}
+      </div>);
+  }
+  
+  render() {
+      return this.props.data.Data !== undefined ? this.renderMain() : (<div />);
   }
 }
 
@@ -234,7 +243,7 @@ class TaskView extends Component {
         <div className="card mb-2">
           <div className="card-header" style={{cursor: 'pointer'}} onClick={this.toggleView}>
              <h5 className="mb-0">Task #{this.props.data.TaskId}</h5>
-             <span>State: {TaskStateStr(this.props.data.TaskState)} WorkerId: {this.props.data.WorkerId} Name: {this.props.data.WorkerName} Address: {this.props.data.WorkerAddress} </span>
+             <span>State: {TaskStateStr(this.props.data.TaskState)} <div className={`${this.props.data.WorkerId == -1 ? 'd-none' : ''}`}>WorkerId: {this.props.data.WorkerId} Name: {this.props.data.WorkerName} Address: {this.props.data.WorkerAddress} </div></span>
           </div>
 
           <div className={`card-body ${!this.state.visible ? 'd-none' : ''}`}>
@@ -300,6 +309,8 @@ class JobSubmit extends Component {
     .then(response => response.json().then(json => {
         if (response.ok) {
              params.JobId = json.JobId;
+             params.JobState = Consts.Queued;
+             params.JobCreatedAt = new Date
              that.props.appendRow(params);
         }
         else {
@@ -312,7 +323,6 @@ class JobSubmit extends Component {
   render() {
     return (
       <div className="p-3">
-      <h3>Submit job </h3>
       <form>
           <div className="row form-inline mb-3">
            <div className="form-group col-2 mr-3">
@@ -366,7 +376,7 @@ class JobSubmit extends Component {
                            defaultValue="65535"
                            onChange={this.handleChange} /></div></div></div>) : '' }
 
-          <button type="button" className="btn btn-primary" onClick={this.submitJob}>submit</button>
+          <button type="button" className="btn btn-primary" onClick={this.submitJob}>submit job</button>
       </form>
       </div>
     );
@@ -376,7 +386,7 @@ class JobSubmit extends Component {
 class JobDetail extends Component {
   constructor(props) {
     super(props);
-    this.state = {data: {}};
+    this.state = {data: {}, job: {}};
   }
 
 
@@ -387,6 +397,7 @@ class JobDetail extends Component {
           if (response.ok) {
               console.log(json);
               this.setState({data: json});
+              this.setState({ job: json.JobInfo});
           }
           else
           {
@@ -399,7 +410,7 @@ class JobDetail extends Component {
     console.log(this.state);
     return (
       <div>
-      <h3>Job #{this.props.match.params.id}</h3>
+      <JobSnippet data={this.state.job} showButtons={false} />
       <div className="accordian">
           {this.state.data.Data && this.state.data.Data.map(task => (<TaskView type={this.state.data.JobInfo.Type} data={task} />))}
       </div>
@@ -453,7 +464,7 @@ class JobList extends Component {
       <div>
         <JobSubmit appendRow={this.appendRow} />
         <div>
-            {this.state.data.map(job => (<JobSnippet data={job} removeRow={this.removeRow} />))}
+            {this.state.data.map(job => (<JobSnippet data={job} removeRow={this.removeRow} showButtons={true} />))}
         </div>
       </div>
     );
@@ -465,7 +476,18 @@ function Home() {
 }
 
 function About() {
-  return <h3>About</h3>;
+  return <div>
+        <h3 className="mt-3">About</h3>
+        <p>
+          <strong>Team:</strong> Jarvis <br /><br />
+
+          <ol>
+            <li>Akshay Aurora</li>
+            <li>Rory Bennett</li>
+            <li>Jarin Moon</li>
+          </ol>
+        </p>
+        </div>;
 }
 
 class App extends Component {

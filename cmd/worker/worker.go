@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
+	"os"
 	"sync"
 	"time"
 )
@@ -39,7 +40,7 @@ func (worker *Worker) doTask() {
 			log.Fatal("Invalid param data")
 		}
 		if portScanParam.Type == common.NormalScan {
-			args.Result = common.NormalPortScan(portScanParam.Ip, portScanParam.PortRange, 3*time.Second)
+			args.Result = common.NormalPortScan(portScanParam.Ip, portScanParam.PortRange, 6*time.Second)
 
 		} else {
 			router, err := routing.New()
@@ -133,7 +134,11 @@ func main() {
 	go http.Serve(l, nil)
 
 	// register worker
-	args := &common.RegisterWorkerArgs{Name: "worker", Address: workerAddr}
+	workerName, err := os.Hostname()
+	if err != nil {
+		workerName = "worker"
+	}
+	args := &common.RegisterWorkerArgs{Name: workerName, Address: workerAddr}
 	var reply common.RegisterWorkerReply
 
 	err = client.Call("Server.RegisterWorker", args, &reply)
