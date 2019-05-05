@@ -535,7 +535,7 @@ func (s *Server) handleJobID(ctx *Context) {
                 var tempJobComplete time.Time
                 var taskDuration time.Duration
 
-		rows, err := db.Table("tasks").Select("id, type, state, worker_id, result, created_at, completed_at").Where("job_id = ?", id).Count(&taskCount).Rows()
+		rows, err := db.Table("tasks").Select("id, type, state, worker_id, created_at, completed_at").Where("job_id = ?", id).Count(&taskCount).Rows()
 		if err != nil {
 			ctx.Error(http.StatusBadRequest, err)
 			return
@@ -556,7 +556,7 @@ func (s *Server) handleJobID(ctx *Context) {
 		queuedCount = 0
 		taskDuration = 0
 		for rows.Next() {
-			rows.Scan(&taskId, &taskType, &taskState, &workerId, &result, &taskCreate, &taskComplete)
+			rows.Scan(&taskId, &taskType, &taskState, &workerId, &taskCreate, &taskComplete)
 			reply.JobInfo.JobCreatedAt = taskCreate
 
 			//Getting worker name
@@ -574,6 +574,8 @@ func (s *Server) handleJobID(ctx *Context) {
 			replyDetail.CompleteTime = taskComplete
 			replyDetail.Data = struct{}{}
 			if taskState == common.Complete {
+				row := db.Table("tasks").Select("result").Where("id = ?", taskId).Row()
+                                row.Scan(&result)
 				if taskDuration < taskComplete.Sub(taskCreate) {
                                         taskDuration = taskComplete.Sub(taskCreate)
                                         tempJobComplete = taskComplete
