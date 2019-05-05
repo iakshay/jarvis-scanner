@@ -153,7 +153,7 @@ class JobSnippet extends Component {
       <div><strong>#</strong>{this.props.data.JobId} / <strong>Type: </strong>{JobTypeStr(this.props.data.Type)} / <strong>Status: </strong>{TaskStateStr(this.props.data.JobState)} </div>
       <div><strong>Creation time: </strong>{moment(this.props.data.JobCreatedAt).fromNow()} 
 
-      {this.props.data.JobState == Consts.Completed ? (<span> / <strong>Duration:</strong> {moment.duration(moment(this.props.data.JobCompletedAt).diff(moment(this.props.data.JobCreatedAt))).humanize()}</span>) : ''}
+      {this.props.data.JobState == Consts.Completed ? (<span> / <strong>Duration:</strong> {moment.duration(moment(this.props.data.JobCompletedAt).diff(moment(this.props.data.JobCreatedAt))).asSeconds()} seconds</span>) : ''}
       </div>
       {this.props.data.Type == Consts.PortScanJob ? 
         (<div>Mode: {PortScanTypeStr(this.props.data.Data.Type)} / Ip: {this.props.data.Data.Ip} / Ports: {this.props.data.Data.PortRange.Start}-{this.props.data.Data.PortRange.End}</div>)
