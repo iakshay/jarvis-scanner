@@ -175,7 +175,6 @@ func (s *scanner) Scan(scanType PortScanType, portRange PortRange) (PortScanResu
 	tcp := layers.TCP{
 		SrcPort: 54321,
 		DstPort: layers.TCPPort(portRange.Start), // will be incremented during the scan
-		SYN:     true,
 	}
 
 	if scanType == SynScan {
@@ -316,6 +315,7 @@ func NormalPortScan(ip net.IP, portRange PortRange, timeout time.Duration) PortS
 	for port := portRange.Start; port <= portRange.End; port++ {
 		wg.Add(1)
 		go func(port uint16) {
+			fmt.Println("Hit")
 			defer wg.Done()
 			var status PortStatus
 			addr := fmt.Sprintf("%s:%d", ip.String(), port)

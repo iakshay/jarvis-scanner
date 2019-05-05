@@ -32,7 +32,7 @@ type Task struct {
 	Type        common.TaskType
 	WorkerId    int
 	Params      []byte // Allows for Unmarshalling to struct objects, as needed
-	Worker      []byte `gorm:"foreignkey:TaskId; association_foreignkey:Id"`
+//	Worker      []byte `gorm:"foreignkey:TaskId; association_foreignkey:Id"`
 	Result      []byte
 	CreatedAt   *time.Time
 	CompletedAt *time.Time
@@ -164,12 +164,20 @@ func (server *Server) Schedule(service *RpcService) {
 
 		fmt.Printf("active workers: %d\n", len(availWorkers))
 
-		var queuedTasks []Task
+					var queuedTasks []Task
 		db.Order("created_at asc").Where("state = ?", common.Queued).Limit(numAvailWorkers).Find(&queuedTasks)
 		availIndex := 0
 		fmt.Printf("queued tasks: %d\n", len(queuedTasks))
 		var inProgressTasks []Task
 		db.Order("created_at asc").Where("state = ?", common.InProgress).Find(&inProgressTasks)
+		for _, task := range inProgressTasks {
+			var worker Worker
+			db.Table("workers").Where("id = ?", task.WorkerId).First(&worker)
+			if (time.Now().Sub(*(worker.UpdatedAt)) > common.HeartbeatInterval) {
+				db.Table("tasks").Where("id = ?", task.Id).Update("state", common.Queued)
+				db.Table("tasks").Where("id = ?", task.Id).Update("worker_id", -1)
+			}
+		}
 
 		for i := 0; i < 2; i++ {
 			var tasks []Task
@@ -186,23 +194,15 @@ func (server *Server) Schedule(service *RpcService) {
 					}
 
 					currWorker := Worker{Id: -1}
-					if i == 1 {
-						workerBytes := task.Worker
-						if err := json.Unmarshal(workerBytes, &currWorker); err != nil {
-							log.Fatal(err)
-						}
+					if i == 1 && task.WorkerId != -1 {
+						db.Table("workers").Where("id = ?", task.WorkerId).First(&currWorker)
 					}
 
-					if currWorker.Id == -1 || (time.Now().Sub(*(currWorker.UpdatedAt)) > common.HeartbeatInterval){
+					if currWorker.Id == -1 {
 						worker := availWorkers[availIndex]
 						db.Table("workers").Where("id = ?", worker.Id).Update("task_id", task.Id)
 						db.Table("tasks").Where("id = ?", task.Id).Update("worker_id", worker.Id)
-						workerBytes, _ := json.Marshal(&worker)
-						db.Table("tasks").Where("id = ?", task.Id).Update("worker", workerBytes)
-						if currWorker.Id == -1 {
-							db.Table("tasks").Where("id= ?", task.Id).Update("state", common.InProgress)
-						}
-						//db.Table("tasks").Where("id = ?", task.Id).Update("worker", worker)
+						db.Table("tasks").Where("id= ?", task.Id).Update("state", common.InProgress)
 						log.Println("starting task for worker")
 						server.startTask(worker.Id, task, service)
 
