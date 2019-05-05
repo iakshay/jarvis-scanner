@@ -21,11 +21,13 @@
   go get -u golang.org/x/net/ipv6
   go get -u golang.org/x/net/ipv4
   go get -u golang.org/x/net/icmp
+  go get -u github.com/google/gopacket
 
   # testing
   go get -u github.com/stretchr/testify
 
   # generate strings
+	# optional: used to generate strings.go
   go get -u golang.org/x/tools/cmd/stringer
 
   # build and install worker and server

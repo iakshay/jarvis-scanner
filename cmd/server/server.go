@@ -26,13 +26,13 @@ const NotAllocatedWorkerId int = -1
 const NotAllocatedTaskId int = -1
 
 type Task struct {
-	Id          int
-	JobId       int
-	State       common.TaskState
-	Type        common.TaskType
-	WorkerId    int
-	Params      []byte // Allows for Unmarshalling to struct objects, as needed
-//	Worker      []byte `gorm:"foreignkey:TaskId; association_foreignkey:Id"`
+	Id       int
+	JobId    int
+	State    common.TaskState
+	Type     common.TaskType
+	WorkerId int
+	Params   []byte // Allows for Unmarshalling to struct objects, as needed
+	//	Worker      []byte `gorm:"foreignkey:TaskId; association_foreignkey:Id"`
 	Result      []byte
 	CreatedAt   *time.Time
 	CompletedAt time.Time
@@ -71,7 +71,8 @@ func (service *RpcService) RegisterWorker(args *common.RegisterWorkerArgs, reply
 	// init connection to worker
 	client, err := rpc.DialHTTP("tcp", args.Address)
 	if err != nil {
-		log.Println("dialing:", err)
+		log.Println("could not establish connection to worker:", err)
+		return nil
 	}
 
 	// insert entry in workers table
@@ -164,7 +165,7 @@ func (server *Server) Schedule(service *RpcService) {
 
 		fmt.Printf("active workers: %d\n", len(availWorkers))
 
-					var queuedTasks []Task
+		var queuedTasks []Task
 		db.Order("created_at asc").Where("state = ?", common.Queued).Limit(numAvailWorkers).Find(&queuedTasks)
 		availIndex := 0
 		fmt.Printf("queued tasks: %d\n", len(queuedTasks))
@@ -173,7 +174,7 @@ func (server *Server) Schedule(service *RpcService) {
 		for _, task := range inProgressTasks {
 			var worker Worker
 			db.Table("workers").Where("id = ?", task.WorkerId).First(&worker)
-			if (time.Now().Sub(*(worker.UpdatedAt)) > common.HeartbeatInterval) {
+			if time.Now().Sub(*(worker.UpdatedAt)) > common.HeartbeatInterval {
 				db.Table("tasks").Where("id = ?", task.Id).Update("state", common.Queued)
 				db.Table("tasks").Where("id = ?", task.Id).Update("worker_id", -1)
 			}
@@ -341,9 +342,9 @@ func (s *Server) handleJobs(ctx *Context) {
 
 					/*Finds the MAX completion time of Tasks*/
 					if taskDuration < taskComplete.Sub(taskCreate) {
-                                                taskDuration = taskComplete.Sub(taskCreate)
-                                                tempJobComplete = taskComplete
-                                        }
+						taskDuration = taskComplete.Sub(taskCreate)
+						tempJobComplete = taskComplete
+					}
 					completedCount++
 				} else if taskState == common.Queued {
 					queuedCount++
@@ -531,9 +532,9 @@ func (s *Server) handleJobID(ctx *Context) {
 		/*Getting tasks*/
 		var taskCount int
 		var taskCreate time.Time
-                var taskComplete time.Time
-                var tempJobComplete time.Time
-                var taskDuration time.Duration
+		var taskComplete time.Time
+		var tempJobComplete time.Time
+		var taskDuration time.Duration
 
 		rows, err := db.Table("tasks").Select("id, type, state, worker_id, result, created_at, completed_at").Where("job_id = ?", id).Count(&taskCount).Rows()
 		if err != nil {
@@ -575,9 +576,9 @@ func (s *Server) handleJobID(ctx *Context) {
 			replyDetail.Data = struct{}{}
 			if taskState == common.Complete {
 				if taskDuration < taskComplete.Sub(taskCreate) {
-                                        taskDuration = taskComplete.Sub(taskCreate)
-                                        tempJobComplete = taskComplete
-                                }
+					taskDuration = taskComplete.Sub(taskCreate)
+					tempJobComplete = taskComplete
+				}
 				completedCount++
 				if taskType == common.IsAliveTask {
 					var isAliveResult common.IsAliveResult
