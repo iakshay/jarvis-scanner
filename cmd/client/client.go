@@ -54,7 +54,7 @@ func main() {
 	if taskName == "list" {
 		fmt.Println("Task name is: ",taskName)
 		//creating get request for list
-		resp, err := http.Get("http://localhost:8080/jobs/")
+		resp, err := http.Get("http://localhost:8000/jobs/")
 	        if err != nil {
 		        log.Fatalln(err)
 	        }
@@ -68,7 +68,7 @@ func main() {
 
 	} else if taskName == "view" && jobId > 0 {
 		fmt.Printf("value of task: %s and id: %d\n",taskName, jobId)
-		resp, err := http.Get("http://localhost:8080/jobs/"+strconv.Itoa(jobId))
+		resp, err := http.Get("http://localhost:8000/jobs/"+strconv.Itoa(jobId))
 		if err != nil {
                         log.Fatalln(err)
                 }
@@ -82,7 +82,7 @@ func main() {
 		client := &http.Client{}
 
 		// Create request
-		req, err := http.NewRequest("DELETE", "http://localhost:8080/jobs/"+strconv.Itoa(jobId), nil)
+		req, err := http.NewRequest("DELETE", "http://localhost:8000/jobs/"+strconv.Itoa(jobId), nil)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -116,7 +116,7 @@ func main() {
 				log.Fatalln(err)
 			}
 			//creating post request for isAlive
-			resp, err := http.Post("http://localhost:8080/jobs/", "application/json", bytes.NewBuffer(bytesRepresentation))
+			resp, err := http.Post("http://localhost:8000/jobs/", "application/json", bytes.NewBuffer(bytesRepresentation))
 			if err != nil {
 				log.Fatalln(err)
 			}
@@ -160,7 +160,7 @@ func main() {
                         if err != nil {
                                 log.Fatalln(err)
                         }
-			resp, err := http.Post("http://localhost:8080/jobs/", "application/json", bytes.NewBuffer(bytesRepresentation))
+			resp, err := http.Post("http://localhost:8000/jobs/", "application/json", bytes.NewBuffer(bytesRepresentation))
                         if err != nil {
                                 log.Fatalln(err)
                         }

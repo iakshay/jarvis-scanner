@@ -35,7 +35,7 @@ type Task struct {
 //	Worker      []byte `gorm:"foreignkey:TaskId; association_foreignkey:Id"`
 	Result      []byte
 	CreatedAt   *time.Time
-	CompletedAt *time.Time
+	CompletedAt time.Time
 }
 
 type Job struct {
@@ -97,7 +97,7 @@ func (service *RpcService) CompleteTask(args *common.CompleteTaskArgs, reply *co
 	service.db.Table("workers").Where("task_id = ?", args.TaskId).Update("task_id", NotAllocatedTaskId)
 
 	// insert entry in reports table
-	if err := service.db.Table("tasks").Where("Id = ?", args.TaskId).Updates(Task{State: common.Complete, Result: buf}).Error; err != nil {
+	if err := service.db.Table("tasks").Where("Id = ?", args.TaskId).Updates(Task{State: common.Complete, Result: buf, CompletedAt: time.Now()}).Error; err != nil {
 		log.Printf("Error adding resort for TaskId %s %d\n", err, args.TaskId)
 	}
 	return nil
@@ -535,7 +535,7 @@ func (s *Server) handleJobID(ctx *Context) {
                 var tempJobComplete time.Time
                 var taskDuration time.Duration
 
-		rows, err := db.Table("tasks").Select("id, type, state, worker_id, created_at, completed_at,  result").Where("job_id = ?", id).Count(&taskCount).Rows()
+		rows, err := db.Table("tasks").Select("id, type, state, worker_id, result, created_at, completed_at").Where("job_id = ?", id).Count(&taskCount).Rows()
 		if err != nil {
 			ctx.Error(http.StatusBadRequest, err)
 			return
@@ -556,7 +556,7 @@ func (s *Server) handleJobID(ctx *Context) {
 		queuedCount = 0
 		taskDuration = 0
 		for rows.Next() {
-			rows.Scan(&taskId, &taskType, &taskState, &workerId, &taskCreate, &taskComplete, &result)
+			rows.Scan(&taskId, &taskType, &taskState, &workerId, &result, &taskCreate, &taskComplete)
 			reply.JobInfo.JobCreatedAt = taskCreate
 
 			//Getting worker name
