@@ -54,7 +54,7 @@
   
   # Running server ($GOPATH/bin/server) 
   # note: clean flag will delete existing database
-  go run cmd/server/server.go --serverAddr="0.0.0.0:8000" --clean
+  go run cmd/server/server.go --serverAddr="0.0.0.0:8000" --rpcAddr="0.0.0.0:8001" --clean
 
   ## Running Command-line Client
 
